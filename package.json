@@ -15,7 +15,7 @@
     "type-check": "tsc --noEmit",
     "build": "bun build src/index.ts --outdir dist",
     "start": "bun run dist/index.js",
-    "dev": "bun run --hot src/index.ts",
+    "dev": "NODE_ENV=development bun run --hot src/index.ts",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src"
   },
