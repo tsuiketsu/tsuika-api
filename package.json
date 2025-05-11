@@ -1,7 +1,23 @@
 {
   "name": "tsuika-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mongodb & Backend Practice",
+  "main": "index.ts",
+  "type": "module",
+  "keywords": ["API", "Backend", "Hono", "Postgres"],
+  "author": {
+    "name": "ImRayy",
+    "url": "https://github.com/ImRayy"
+  },
+  "license": "AGPL-3.0",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "type-check": "tsc --noEmit",
+    "build": "bun build src/index.ts --outdir dist",
+    "start": "bun run dist/index.js",
+    "dev": "bun run --hot src/index.ts",
+    "format": "biome format --write ./src",
+    "lint": "biome check --write ./src"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
@@ -11,6 +27,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.1",
     "postgres": "^3.4.5"
   },
