@@ -1,9 +1,14 @@
-import { Hono } from 'hono'
+import { app } from "./app";
 
-const app = new Hono()
+import type { Serve } from "bun";
 
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-})
+const port = process.env.PORT;
 
-export default app
+app.get("/", (c) => {
+  return c.text("🔖 Tsuika API up and running");
+});
+
+export default {
+  port: port || 8000,
+  fetch: app.fetch,
+} satisfies Serve;
