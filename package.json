@@ -1,0 +1,22 @@
+{
+  "name": "tsuika-backend",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "drizzle-orm": "^0.43.1",
+    "hono": "^4.7.9",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "drizzle-kit": "^0.31.1",
+    "postgres": "^3.4.5"
+  },
+  "peerDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  },
+  "trustedDependencies": ["@biomejs/biome"]
+}
