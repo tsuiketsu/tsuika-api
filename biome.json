@@ -21,7 +21,7 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "complexity": { "useArrowFunction": "off" },
+      "complexity": { "useArrowFunction": "off", "useLiteralKeys": "off" },
       "suspicious": { "noExplicitAny": "warn" }
     }
   },
