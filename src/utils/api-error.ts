@@ -1,26 +1,31 @@
-class ApiError extends Error {
-  statusCode: number;
-  data: null;
-  success: false;
-  errors: Error[];
+import { HTTPException } from "hono/http-exception";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
+class ApiError extends HTTPException {
   constructor(
-    statusCode: number,
-    message = "Something went wrong",
-    errors = [],
-    stack = "",
+    statusCode: ContentfulStatusCode,
+    message = "An error occurred",
+    errors: Error[] = [],
   ) {
-    super(message);
-    this.statusCode = statusCode;
-    this.data = null;
-    this.success = false;
-    this.errors = errors;
-
-    if (stack) {
-      this.stack = stack;
-    } else {
-      Error.captureStackTrace(this, this.constructor);
-    }
+    super(statusCode, {
+      res: new Response(
+        JSON.stringify({
+          success: false,
+          message,
+          data: null,
+          errors: errors.map((e) => ({
+            message: e.message,
+            stack: e.stack,
+          })),
+        }),
+        {
+          status: statusCode,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    });
   }
 }
 
