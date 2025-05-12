@@ -1,10 +1,9 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { userInsertSchema } from "../db/schema/users.schema";
+import { profileInsertSchema } from "../db/schema/profile.schema";
 
-export const createUserSchema = userInsertSchema.pick({
+export const createUserSchema = profileInsertSchema.pick({
   username: true,
   fullName: true,
-  email: true,
 });
 
 export type SuccessResponse<T = void> = {

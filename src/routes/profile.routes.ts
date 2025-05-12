@@ -1,8 +1,8 @@
-import { eq, or } from "drizzle-orm";
-import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "../db";
-import { users } from "../db/schema/users.schema";
+import { profile } from "../db/schema/profile.schema";
+import { createRouter } from "../lib/create-app";
 import {
   type ImageKitReponse,
   type SuccessResponse,
@@ -12,22 +12,20 @@ import { ApiError } from "../utils/api-error";
 import { uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
 
-const app = new Hono();
+const router = createRouter();
 
 // -----------------------------------------
 // ADD NEW USER
 // -----------------------------------------
-app.post("/add", zValidator("form", createUserSchema), async (c) => {
-  const { username, email, fullName } = c.req.valid("form");
+router.post("/add", zValidator("form", createUserSchema), async (c) => {
+  const { username, fullName } = c.req.valid("form");
 
   const body = await c.req.parseBody();
 
-  const isUserExists = await db.query.users.findFirst({
-    where: or(eq(users.username, username), eq(users.email, email)),
+  const isUserExists = await db.query.profile.findFirst({
+    where: eq(profile.username, username),
     columns: { userId: true },
   });
-
-  console.log(isUserExists);
 
   if (isUserExists) {
     throw new ApiError(409, "User with email or username already exists");
@@ -57,12 +55,9 @@ app.post("/add", zValidator("form", createUserSchema), async (c) => {
   }
 
   const user = await db
-    .insert(users)
+    .insert(profile)
     .values({
-      // FIX: Random authId is tempurary
-      authId: crypto.randomUUID(),
       username,
-      email,
       fullName,
       avatar: avatar.url,
       coverImage: coverImage.url,
@@ -75,8 +70,6 @@ app.post("/add", zValidator("form", createUserSchema), async (c) => {
   if (!user || user.length === 0) {
     throw new ApiError(500, "Failed to add user");
   }
-
-  user[0].authId = undefined;
 
   return c.json<SuccessResponse<z.infer<typeof createUserSchema>>>(
     {
@@ -99,4 +92,4 @@ app.post("/add", zValidator("form", createUserSchema), async (c) => {
 //     },
 // );
 
-export default app;
+export default router;

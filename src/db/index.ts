@@ -1,6 +1,6 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
-import * as schema1 from "./schema/users.schema";
+import * as schema1 from "./schema/profile.schema";
 const connectionString = process.env.DATABASE_URL;
 
 // Configuring Neon for local development

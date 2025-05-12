@@ -1,12 +1,11 @@
-import { json, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { json, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
+import { user } from "./auth.schema";
 
-const users = pgTable("users", {
-  userId: uuid().primaryKey().defaultRandom(),
-  authId: text().unique().notNull(),
+export const profile = pgTable("profiles", {
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
   username: text().unique().notNull(),
-  email: text().unique().notNull(),
   fullName: text().notNull(),
   avatar: text(),
   coverImage: text(),
@@ -15,12 +14,12 @@ const users = pgTable("users", {
   updatedAt: timestamp({ withTimezone: true }).defaultNow(),
 });
 
-const userInsertSchema = createInsertSchema(users, {
+export const profileInsertSchema = createInsertSchema(profile, {
+  userId: z.string().optional(),
   username: z
     .string()
     .min(3, { message: "Username must be atleast 3 characters" })
     .max(30, { message: "Username must be at most 30 characters long." }),
-  email: z.string().email({ message: "Invalid email address." }),
   fullName: z
     .string()
     .min(3, { message: "Full name must be at least 3 characters long." })
@@ -30,6 +29,4 @@ const userInsertSchema = createInsertSchema(users, {
   preferencesJson: z.object({}),
 });
 
-const userUpdateSchema = createUpdateSchema(users);
-
-export { users, userInsertSchema, userUpdateSchema };
+export const profileUpdateSchema = createUpdateSchema(profile);

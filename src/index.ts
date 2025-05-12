@@ -1,6 +1,5 @@
-import { app } from "./app";
-
 import type { Serve } from "bun";
+import { app } from "./app";
 
 const port = process.env.PORT;
 
