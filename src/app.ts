@@ -1,6 +1,7 @@
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import createApp from "./lib/create-app";
+import requireAuth from "./middlewares/require-auth.middleware";
 import addSession from "./middlewares/session.middleware";
 
 const app = createApp();
@@ -19,6 +20,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use("*", requireAuth);
 
 // Routes imports
 import { auth, profile } from "./routes";
