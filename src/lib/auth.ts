@@ -14,8 +14,7 @@ export const auth = betterAuth({
     },
     usePlural: true,
   }),
-  // NOTE: Configure this later
-  // trustedOrigins: [],
+  trustedOrigins: [process.env.CORS_ORIGIN],
   emailAndPassword: {
     enabled: true,
   },
