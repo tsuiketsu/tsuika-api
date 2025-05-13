@@ -23,9 +23,14 @@ app.use(
 app.use("*", requireAuth);
 
 // Routes imports
-import { auth, profile } from "./routes";
+import { auth, bookmark, profile } from "./routes";
 
 app.route("/api", auth);
-app.basePath("/api/v1").route("/profiles", profile);
+
+const routes = { profile, bookmark } as const;
+
+for (const [key, value] of Object.entries(routes)) {
+  app.basePath("/api/v1").route(`/${key}s`, value);
+}
 
 export { app };

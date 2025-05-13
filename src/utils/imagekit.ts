@@ -1,5 +1,5 @@
 import ImageKit = require("imagekit");
-import type { ImageKitReponse } from "../types/schema.types";
+import type { ImageKitReponse } from "../types";
 
 const imageKit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
@@ -7,7 +7,7 @@ const imageKit = new ImageKit({
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
 });
 
-const uploadOnImageKit = async (localFile: File): Promise<ImageKitReponse> => {
+const validateImageKitCredentials = (): ImageKitReponse => {
   if (
     !process.env.IMAGEKIT_URL_ENDPOINT ||
     !process.env.IMAGEKIT_PRIVATE_KEY ||
@@ -18,8 +18,15 @@ const uploadOnImageKit = async (localFile: File): Promise<ImageKitReponse> => {
       message:
         "ImageKig credentials missing, URL_ENDPOINT, PRIVATE_KEY, PUBLIC_KEY are required",
       url: null,
+      fileId: null,
     };
   }
+};
+
+export const uploadOnImageKit = async (
+  localFile: File,
+): Promise<ImageKitReponse> => {
+  validateImageKitCredentials();
 
   try {
     if (localFile.size > 500 * 1024) {
@@ -27,6 +34,7 @@ const uploadOnImageKit = async (localFile: File): Promise<ImageKitReponse> => {
         status: 413,
         message: "File is larger than set limit. Max 500KB allowed",
         url: null,
+        fileId: null,
       };
     }
 
@@ -45,14 +53,28 @@ const uploadOnImageKit = async (localFile: File): Promise<ImageKitReponse> => {
       status: 200,
       message: "file successfully uploaded to imagekit",
       url: response.url,
+      fileId: response.fileId,
     };
   } catch (error) {
     return {
       status: 502,
       message: error.message || "File upload failed. Please try again later",
       url: null,
+      fileId: null,
     };
   }
 };
 
-export { uploadOnImageKit };
+export const deleteFromImageKit = async (fileId: string) => {
+  validateImageKitCredentials();
+
+  try {
+    const response = await imageKit.deleteFile(fileId);
+
+    if (response) {
+      console.log("Successfully deleted file from ImageKit");
+    }
+  } catch (error) {
+    console.error(error.message || "Failed to delete file from ImageKit");
+  }
+};

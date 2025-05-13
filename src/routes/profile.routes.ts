@@ -1,8 +1,7 @@
-import type { z } from "zod";
 import { db } from "../db";
 import { profile } from "../db/schema/profile.schema";
 import { createRouter } from "../lib/create-app";
-import type { ImageKitReponse, SuccessResponse } from "../types/schema.types";
+import type { ImageKitReponse } from "../types";
 import { ApiError } from "../utils/api-error";
 import { uploadOnImageKit } from "../utils/imagekit";
 

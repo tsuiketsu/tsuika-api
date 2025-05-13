@@ -1,12 +1,13 @@
-import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { z } from "zod";
+import {
+  bookmarkInsertSchema,
+  type bookmarkSelectSchema,
+} from "../db/schema/bookmark.schema";
 
-export type SuccessResponse<T = void> = {
-  success: true;
-  message: string;
-} & (T extends void ? Record<string, never> : { data: T });
+export const createBookmarkSchema = bookmarkInsertSchema.pick({
+  title: true,
+  description: true,
+  url: true,
+});
 
-export type ImageKitReponse = {
-  status: ContentfulStatusCode;
-  message: string;
-  url: string | null;
-};
+export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
