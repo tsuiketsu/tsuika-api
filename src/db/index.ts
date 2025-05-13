@@ -1,6 +1,9 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
-import * as schema1 from "./schema/profile.schema";
+import * as authSchema from "./schema/auth.schema";
+import * as bookmarkSchema from "./schema/bookmark.schema";
+import * as profileSchema from "./schema/profile.schema";
+
 const connectionString = process.env.DATABASE_URL;
 
 // Configuring Neon for local development
@@ -25,7 +28,11 @@ const sql = neon(connectionString);
 // - Lower overhead for single queries
 // - Better for applications with sporadic database access
 export const db = drizzleHttp({
-  schema: { ...schema1 },
+  schema: {
+    ...authSchema,
+    ...profileSchema,
+    ...bookmarkSchema,
+  },
   client: sql,
   casing: "snake_case",
 });
