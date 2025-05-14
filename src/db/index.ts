@@ -1,8 +1,10 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import * as authSchema from "./schema/auth.schema";
+import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
 import * as profileSchema from "./schema/profile.schema";
+import * as tagSchema from "./schema/tag.schema";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -32,6 +34,8 @@ export const db = drizzleHttp({
     ...authSchema,
     ...profileSchema,
     ...bookmarkSchema,
+    ...tagSchema,
+    ...bookmarkTagSchema,
   },
   client: sql,
   casing: "snake_case",

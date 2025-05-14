@@ -3,6 +3,7 @@ import { boolean, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { user } from "./auth.schema";
+import { bookmarkTag } from "./bookmark-tag.schema";
 import { timestamps } from "./constants";
 
 export const bookmark = pgTable("bookmarks", {
@@ -21,12 +22,14 @@ export const bookmark = pgTable("bookmarks", {
   ...timestamps,
 });
 
-export const bookmarkRelations = relations(bookmark, ({ one }) => ({
+export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
   owner: one(user, {
     fields: [bookmark.userId],
     references: [user.id],
     relationName: "owner",
   }),
+
+  bookmarkTag: many(bookmarkTag),
 }));
 
 export const bookmarkSelectSchema = createSelectSchema(bookmark);
