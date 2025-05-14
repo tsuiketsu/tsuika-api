@@ -1,4 +1,4 @@
-import ImageKit = require("imagekit");
+import ImageKit from "imagekit";
 import type { ImageKitReponse } from "../types";
 
 const imageKit = new ImageKit({
@@ -7,7 +7,7 @@ const imageKit = new ImageKit({
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
 });
 
-const validateImageKitCredentials = (): ImageKitReponse => {
+const validateImageKitCredentials = () => {
   if (
     !process.env.IMAGEKIT_URL_ENDPOINT ||
     !process.env.IMAGEKIT_PRIVATE_KEY ||
@@ -55,7 +55,8 @@ export const uploadOnImageKit = async (
       url: response.url,
       fileId: response.fileId,
     };
-  } catch (error) {
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  } catch (error: any) {
     return {
       status: 502,
       message: error.message || "File upload failed. Please try again later",
@@ -74,7 +75,8 @@ export const deleteFromImageKit = async (fileId: string) => {
     if (response) {
       console.log("Successfully deleted file from ImageKit");
     }
-  } catch (error) {
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  } catch (error: any) {
     console.error(error.message || "Failed to delete file from ImageKit");
   }
 };

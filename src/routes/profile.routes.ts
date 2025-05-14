@@ -16,22 +16,22 @@ router.post("/insert", async (c) => {
   const localAvatarUrl = body["avatar"];
   const localCoverImageUrl = body["coverImage"];
 
-  let avatar: ImageKitReponse;
+  let avatar: ImageKitReponse | undefined;
 
   if (localAvatarUrl && localAvatarUrl instanceof File) {
     avatar = await uploadOnImageKit(localAvatarUrl as File);
 
-    if (!avatar) {
-      throw new ApiError(avatar.status, avatar.message);
+    if (!avatar?.url) {
+      throw new ApiError(avatar?.status || 502, avatar?.message);
     }
   }
 
-  let coverImage: ImageKitReponse;
+  let coverImage: ImageKitReponse | undefined;
 
   if (localCoverImageUrl && localCoverImageUrl instanceof File) {
     coverImage = await uploadOnImageKit(localCoverImageUrl);
 
-    if (!coverImage.url) {
+    if (coverImage.url) {
       throw new ApiError(coverImage.status, coverImage.message);
     }
   }
@@ -39,8 +39,8 @@ router.post("/insert", async (c) => {
   const user = await db
     .insert(profile)
     .values({
-      avatar: avatar.url,
-      coverImage: coverImage.url,
+      avatar: avatar?.url ?? null,
+      coverImage: coverImage?.url ?? null,
     })
     .returning()
     .catch((err) => {

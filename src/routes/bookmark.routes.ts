@@ -1,6 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
-import type { z } from "zod";
 import { db } from "../db";
 import {
   bookmark,
@@ -89,7 +88,7 @@ router.post("/insert", zValidator("json", createBookmarkSchema), async (c) => {
     throw new ApiError(401, "Failed to add bookmark, user not found");
   }
 
-  const data = await db
+  const data: BookmarkType[] = await db
     .insert(bookmark)
     .values({
       userId: user.id,
@@ -100,11 +99,11 @@ router.post("/insert", zValidator("json", createBookmarkSchema), async (c) => {
     })
     .returning();
 
-  if (!data) {
+  if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to add bookmark");
   }
 
-  return c.json<SuccessResponse<z.infer<typeof createBookmarkSchema>>>(
+  return c.json<SuccessResponse<BookmarkType>>(
     {
       success: true,
       message: "Bookmark added successfully 🔖",
@@ -118,6 +117,12 @@ router.post("/insert", zValidator("json", createBookmarkSchema), async (c) => {
 // GET BOOKMARK BY ID
 // -----------------------------------------
 router.get(":id", async (c) => {
+  const userId = c.get("user")?.id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized access detected");
+  }
+
   const bookmarkId = Number.parseInt(c.req.param("id"));
 
   if (!bookmarkId) {
@@ -125,10 +130,7 @@ router.get(":id", async (c) => {
   }
 
   const data = await db.query.bookmark.findFirst({
-    where: and(
-      eq(bookmark.userId, c.get("user").id),
-      eq(bookmark.id, bookmarkId),
-    ),
+    where: and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)),
   });
 
   if (!data) {
@@ -150,8 +152,17 @@ router.get(":id", async (c) => {
 // -----------------------------------------
 router.patch(
   ":id/update",
-  zValidator("json", bookmarkInsertSchema.partial()),
+  zValidator(
+    "json",
+    bookmarkInsertSchema.pick({ title: true, url: true, description: true }),
+  ),
   async (c) => {
+    const userId = c.get("user")?.id;
+
+    if (!userId) {
+      throw new ApiError(401, "Unauthorized access detected");
+    }
+
     const bookmarkId = await verifyBookmarkExistence(c);
 
     const { title, url, description } = c.req.valid("json");
@@ -162,7 +173,7 @@ router.patch(
       throw new ApiError(401, "Failed to add bookmark, user not found");
     }
 
-    const data = await db
+    const data: BookmarkType[] = await db
       .update(bookmark)
       .set({
         title,
@@ -171,16 +182,14 @@ router.patch(
         faviconUrl: getFavIcon(url),
         updatedAt: sql`NOW()`,
       })
-      .where(
-        and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, bookmarkId)),
-      )
+      .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
       .returning();
 
-    if (data.length === 0) {
+    if (data.length === 0 || data[0] == null) {
       throw new ApiError(502, "Failed to updated bookmark");
     }
 
-    return c.json<SuccessResponse<z.infer<typeof createBookmarkSchema>>>(
+    return c.json<SuccessResponse<BookmarkType>>(
       {
         success: true,
         message: "Bookmark updated successfully 🔖",
@@ -195,14 +204,18 @@ router.patch(
 // DELETE BOOKMARK
 // -----------------------------------------
 router.delete("/:id", async (c) => {
+  const userId = c.get("user")?.id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized access detected");
+  }
+
   const bookmarkId = await verifyBookmarkExistence(c);
 
   // Remove bookmark from database
   const data: { deleteId: number }[] = await db
     .delete(bookmark)
-    .where(
-      and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, bookmarkId)),
-    )
+    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
     .returning({
       deleteId: bookmark.id,
     });
@@ -224,6 +237,12 @@ router.delete("/:id", async (c) => {
 // UPDATE BOOKMARK THUMBNAIL
 // -----------------------------------------
 router.patch(":id/change-thumbnail", async (c) => {
+  const userId = c.get("user")?.id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized access detected");
+  }
+
   const bookmarkId = await verifyBookmarkExistence(c);
 
   // Verify if thumbnail path provided
@@ -231,27 +250,20 @@ router.patch(":id/change-thumbnail", async (c) => {
 
   const localThumbnailUrl = body["path"];
 
-  if (!localThumbnailUrl) {
+  if (!localThumbnailUrl || !(localThumbnailUrl instanceof File)) {
     throw new ApiError(400, "Thumbnail image file is required");
   }
 
-  // Upload image on imagekit
-  let thumbnail: ImageKitReponse;
+  // Upload thumbnail on imagekit
+  const thumbnail = await uploadOnImageKit(localThumbnailUrl);
 
-  if (localThumbnailUrl && localThumbnailUrl instanceof File) {
-    thumbnail = await uploadOnImageKit(localThumbnailUrl);
-
-    if (!thumbnail.url) {
-      throw new ApiError(thumbnail.status, thumbnail.message);
-    }
+  if (!thumbnail || !thumbnail.fileId) {
+    throw new ApiError(thumbnail?.status || 502, thumbnail?.message);
   }
 
   // Get previous thumbnail url before updating
   const prevThumbnail = await db.query.bookmark.findFirst({
-    where: and(
-      eq(bookmark.userId, c.get("user").id),
-      eq(bookmark.id, bookmarkId),
-    ),
+    where: and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)),
 
     columns: {
       thumbnail: true,
@@ -259,25 +271,23 @@ router.patch(":id/change-thumbnail", async (c) => {
   });
 
   // Update thumbnail
-  const data: { thumbnail: string }[] = await db
+  const data: { thumbnail: string | null }[] = await db
     .update(bookmark)
     .set({
       thumbnail: thumbnail.fileId,
       updatedAt: sql`NOW()`,
     })
-    .where(
-      and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, bookmarkId)),
-    )
+    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
     .returning({
       thumbnail: bookmark.thumbnail,
     });
 
-  if (data.length === 0) {
+  if (data.length === 0 || data[0] == null || data[0]?.thumbnail == null) {
     throw new ApiError(502, "Failed to update thumbnail");
   }
 
   // Delete & purge old thumbnail
-  if (prevThumbnail) {
+  if (prevThumbnail?.thumbnail) {
     await deleteFromImageKit(prevThumbnail.thumbnail);
   }
 
@@ -285,7 +295,9 @@ router.patch(":id/change-thumbnail", async (c) => {
     {
       success: true,
       message: "Successfully updated thumbnail",
-      data: data[0],
+      data: {
+        thumbnail: data[0]?.thumbnail ?? "https://placehold.co/1280x698",
+      },
     },
     200,
   );
