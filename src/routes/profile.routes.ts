@@ -10,7 +10,7 @@ const router = createRouter();
 // -----------------------------------------
 // ADD NEW USER
 // -----------------------------------------
-router.post("/insert", async (c) => {
+router.post("/", async (c) => {
   const body = await c.req.parseBody();
 
   const localAvatarUrl = body["avatar"];

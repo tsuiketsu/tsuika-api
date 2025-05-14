@@ -41,7 +41,7 @@ const verifyBookmarkExistence = async (c: Context) => {
   return id;
 };
 
-const updateBookmarkBooleanField = async (
+const setBookmarkFlag = async (
   c: Context,
   field: "isPinned" | "isArchived" | "isFavourite",
 ) => {
@@ -75,7 +75,7 @@ const updateBookmarkBooleanField = async (
 // -----------------------------------------
 // ADD NEW BOOKMARK
 // -----------------------------------------
-router.post("/insert", zValidator("json", createBookmarkSchema), async (c) => {
+router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   const { title, url, description } = c.req.valid("json");
 
   if (!title || !url) {
@@ -150,8 +150,8 @@ router.get(":id", async (c) => {
 // -----------------------------------------
 // UPDATE BOOKMARK
 // -----------------------------------------
-router.patch(
-  ":id/update",
+router.put(
+  ":id",
   zValidator(
     "json",
     bookmarkInsertSchema.pick({ title: true, url: true, description: true }),
@@ -203,7 +203,7 @@ router.patch(
 // -----------------------------------------
 // DELETE BOOKMARK
 // -----------------------------------------
-router.delete("/:id", async (c) => {
+router.delete(":id", async (c) => {
   const userId = c.get("user")?.id;
 
   if (!userId) {
@@ -236,7 +236,7 @@ router.delete("/:id", async (c) => {
 // -----------------------------------------
 // UPDATE BOOKMARK THUMBNAIL
 // -----------------------------------------
-router.patch(":id/change-thumbnail", async (c) => {
+router.patch(":id/thumbnail", async (c) => {
   const userId = c.get("user")?.id;
 
   if (!userId) {
@@ -306,14 +306,8 @@ router.patch(":id/change-thumbnail", async (c) => {
 // -----------------------------------------
 // TOGGLE BOOKMARK PIN, FAVORITE, ARCHIVE
 // -----------------------------------------
-router.patch(":id/set-pin", (c) => updateBookmarkBooleanField(c, "isPinned"));
-
-router.patch(":id/set-favorite", (c) =>
-  updateBookmarkBooleanField(c, "isFavourite"),
-);
-
-router.patch(":id/set-archive", (c) =>
-  updateBookmarkBooleanField(c, "isArchived"),
-);
+router.patch(":id/pin", (c) => setBookmarkFlag(c, "isPinned"));
+router.patch(":id/favorite", (c) => setBookmarkFlag(c, "isFavourite"));
+router.patch(":id/archive", (c) => setBookmarkFlag(c, "isArchived"));
 
 export default router;
