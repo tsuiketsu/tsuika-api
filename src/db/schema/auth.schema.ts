@@ -1,6 +1,6 @@
 import { boolean, pgSchema, text, timestamp } from "drizzle-orm/pg-core";
 
-const auth = pgSchema("auth");
+export const auth = pgSchema("auth");
 
 export const user = auth.table("users", {
   id: text("id").primaryKey(),
