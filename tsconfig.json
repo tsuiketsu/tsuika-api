@@ -1,5 +1,5 @@
 {
-  "cjmpilerOptions": {
+  "compilerOptions": {
     "lib": ["esnext"],
     "target": "ESNext",
     "module": "ESNext",
