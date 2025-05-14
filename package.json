@@ -2,7 +2,7 @@
   "name": "tsuika-backend",
   "private": true,
   "version": "1.0.0",
-  "description": "Mongodb & Backend Practice",
+  "description": "Backend for tsuika build with 🔥, 🍞 and 🐘",
   "main": "index.ts",
   "type": "module",
   "keywords": ["API", "Backend", "Hono", "Postgres"],
@@ -16,7 +16,8 @@
     "start": "bun src/index.js",
     "dev": "NODE_ENV=development bun run --hot src/index.ts",
     "format": "biome format --write ./src",
-    "lint": "biome check --write ./src"
+    "lint": "biome check --write ./src",
+    "start:db": "docker compose up && sleep 2 && bun run drizzle-kit studio"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
@@ -25,13 +26,16 @@
     "drizzle-zod": "^0.7.1",
     "hono": "^4.7.9",
     "imagekit": "^6.0.0",
+    "tinycolor2": "^1.6.0",
     "ws": "^8.18.2"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@hono/zod-validator": "^0.5.0",
+    "@types/tinycolor2": "^1.4.6",
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.1",
+    "drizzle-seed": "^0.3.1",
     "postgres": "^3.4.5",
     "zod": "^3.24.4"
   },

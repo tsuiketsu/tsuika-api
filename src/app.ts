@@ -23,11 +23,11 @@ app.use(
 app.use("*", requireAuth);
 
 // Routes imports
-import { auth, bookmark, profile } from "./routes";
+import { auth, bookmark, profile, tag } from "./routes";
 
 app.route("/api", auth);
 
-const routes = { profile, bookmark } as const;
+const routes = { profile, bookmark, tag } as const;
 
 for (const [key, value] of Object.entries(routes)) {
   app.basePath("/api/v1").route(`/${key}s`, value);

@@ -3,6 +3,7 @@ import {
   bookmarkInsertSchema,
   type bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
+import type { tagSelectSchema } from "../db/schema/tag.schema";
 
 export const createBookmarkSchema = bookmarkInsertSchema.pick({
   title: true,
@@ -11,3 +12,4 @@ export const createBookmarkSchema = bookmarkInsertSchema.pick({
 });
 
 export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
+export type TagType = z.infer<typeof tagSelectSchema>;

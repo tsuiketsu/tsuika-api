@@ -6,6 +6,15 @@ export type SuccessResponse<T = void> = {
   // biome-ignore lint/complexity/noBannedTypes:
 } & (T extends void ? {} : { data: T });
 
+export type PaginatedSuccessResponse<T> = SuccessResponse<T> & {
+  patination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
+};
+
 export type ImageKitReponse = {
   status: ContentfulStatusCode;
   message: string;
