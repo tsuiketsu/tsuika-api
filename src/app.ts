@@ -33,4 +33,19 @@ for (const [key, value] of Object.entries(routes)) {
   app.basePath("/api/v1").route(`/${key}s`, value);
 }
 
+// -----------------------------------------
+// GET USER SESSION
+// -----------------------------------------
+app.get("/api/session", async (c) => {
+  const session = c.get("session");
+  const user = c.get("user");
+
+  if (!user) return c.body(null, 401);
+
+  return c.json({
+    session,
+    user,
+  });
+});
+
 export { app };
