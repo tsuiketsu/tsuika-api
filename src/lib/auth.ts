@@ -15,6 +15,12 @@ export const auth = betterAuth({
     usePlural: true,
   }),
   trustedOrigins: [process.env.CORS_ORIGIN],
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60,
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },
