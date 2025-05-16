@@ -1,5 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
+import { useId } from "hono/jsx";
+import type { z } from "zod";
 import { db } from "../db";
 import {
   bookmark,
@@ -7,8 +9,13 @@ import {
   bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
 import { createRouter } from "../lib/create-app";
-import type { ImageKitReponse, SuccessResponse } from "../types";
+import type {
+  ImageKitReponse,
+  PaginatedSuccessResponse,
+  SuccessResponse,
+} from "../types";
 import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
+import { getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
@@ -111,6 +118,36 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
     },
     200,
   );
+});
+
+// -----------------------------------------
+// GET ALL BOOKMARKS
+// -----------------------------------------
+router.get("/", async (c) => {
+  const userId = await getUserId(c);
+  const { page, limit, offset } = getPagination(c.req.query());
+
+  const data = await db.query.bookmark.findMany({
+    where: eq(bookmark.userId, userId),
+    limit,
+    offset,
+  });
+
+  if (data.length === 0) {
+    throw new ApiError(400, "No tags found");
+  }
+
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
+    success: true,
+    message: "Successfully fetched all bookmarks",
+    data,
+    pagination: {
+      page,
+      limit,
+      total: data.length,
+      hasMore: data.length === limit,
+    },
+  });
 });
 
 // -----------------------------------------
