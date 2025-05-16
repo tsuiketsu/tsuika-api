@@ -98,7 +98,7 @@ router.get("/", async (c) => {
       success: true,
       message: "Successfully fetched all tags",
       data,
-      patination: {
+      pagination: {
         page,
         limit,
         total: data.length,

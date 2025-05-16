@@ -7,7 +7,7 @@ export type SuccessResponse<T = void> = {
 } & (T extends void ? {} : { data: T });
 
 export type PaginatedSuccessResponse<T> = SuccessResponse<T> & {
-  patination: {
+  pagination: {
     page: number;
     limit: number;
     total: number;
