@@ -1,10 +1,15 @@
-import { and, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import tinycolor from "tinycolor2";
 import { db } from "../db";
 import { tag, tagInsertSchema, tagUpdateSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
-import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
+import {
+  orderDirections,
+  type OrderDirection,
+  type PaginatedSuccessResponse,
+  type SuccessResponse,
+} from "../types";
 import type { TagType } from "../types/schema.types";
 import { getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
@@ -79,12 +84,18 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
 // -----------------------------------------
 router.get("/", async (c) => {
   const userId = await getUserId(c);
+  const orderBy = c.req.query("orderBy")?.toLowerCase() as OrderDirection;
+
+  if (orderBy && !orderDirections.includes(orderBy)) {
+    throw new ApiError(400, "Invalid order direction");
+  }
 
   const { offset, limit, page } = getPagination(c.req.query());
 
   const data = await db.query.tag.findMany({
     where: eq(tag.userId, userId),
     columns: { userId: false },
+    orderBy: orderBy === "desc" ? desc(tag.updatedAt) : asc(tag.updatedAt),
     offset,
     limit,
   });

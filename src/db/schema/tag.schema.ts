@@ -41,4 +41,4 @@ export const tagInsertSchema = createInsertSchema(tag, {
 export const tagUpdateSchema = createUpdateSchema(tag, {
   name: z.string().max(30).optional(),
   color: z.string().min(6).max(15).optional(),
-}).omit({ userId: true });
+}).omit({ userId: true, createdAt: true, updatedAt: true });
