@@ -1,7 +1,7 @@
 import { zValidator as zv } from "@hono/zod-validator";
 import type { ValidationTargets } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { ZodSchema } from "zod";
-import { ApiError } from "./api-error";
 
 export const zValidator = <
   T extends ZodSchema,
@@ -12,6 +12,6 @@ export const zValidator = <
 ) =>
   zv(target, schema, (result, _) => {
     if (!result.success) {
-      throw new ApiError(400, result["error"]);
+      throw new HTTPException(400, result.error);
     }
   });

@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT } from "../constants";
 import type { AuthType } from "../lib/create-app";
+import { type OrderDirection, orderDirections } from "../types";
 import { ApiError } from "./api-error";
 
 export const getUserId = async (c: Context<AuthType>): Promise<string> => {
@@ -25,4 +26,16 @@ export const getPagination = (
   const offset = (page - 1) * safeLimit;
 
   return { offset, limit: safeLimit, page };
+};
+
+export const getOrderDirection = (
+  query: Record<string, string | undefined>,
+): OrderDirection => {
+  const orderBy = query?.orderBy as OrderDirection;
+
+  if (orderBy && !orderDirections.includes(orderBy)) {
+    throw new ApiError(400, "Invalid order direction");
+  }
+
+  return orderBy;
 };

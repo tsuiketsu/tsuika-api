@@ -1,5 +1,6 @@
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import kebabCase from "lodash.kebabcase";
 import createApp from "./lib/create-app";
 import requireAuth from "./middlewares/require-auth.middleware";
 import addSession from "./middlewares/session.middleware";
@@ -14,7 +15,7 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN,
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "PUT", "PATCH", "OPTIONS"],
+    allowMethods: ["POST", "GET", "PUT", "PATCH", "OPTIONS", "DELETE"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
     credentials: true,
@@ -23,14 +24,14 @@ app.use(
 app.use("*", requireAuth);
 
 // Routes imports
-import { auth, bookmark, profile, tag } from "./routes";
+import { auth, bookmark, bookmarkTag, profile, tag } from "./routes";
 
 app.route("/api", auth);
 
-const routes = { profile, bookmark, tag } as const;
+const routes = { profile, bookmark, tag, bookmarkTag } as const;
 
 for (const [key, value] of Object.entries(routes)) {
-  app.basePath("/api/v1").route(`/${key}s`, value);
+  app.basePath("/api/v1").route(`/${kebabCase(key)}s`, value);
 }
 
 // -----------------------------------------

@@ -1,6 +1,14 @@
-import { relations } from "drizzle-orm";
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { eq, relations, sql } from "drizzle-orm";
+import {
+  integer,
+  json,
+  pgTable,
+  pgView,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { createSelectSchema } from "drizzle-zod";
 import { user } from "./auth.schema";
 import { bookmark } from "./bookmark.schema";
 import { tag } from "./tag.schema";
@@ -8,18 +16,20 @@ import { tag } from "./tag.schema";
 export const bookmarkTag = pgTable(
   "bookmark_tags",
   {
-    tagId: integer("tag_id").references(() => tag.id, { onDelete: "cascade" }),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    bookmarkId: integer("bookmark_id").references(() => bookmark.id, {
-      onDelete: "cascade",
-    }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tag.id, { onDelete: "cascade" }),
+    bookmarkId: integer("bookmark_id")
+      .notNull()
+      .references(() => bookmark.id, { onDelete: "cascade" }),
     appliedAt: timestamp("applied_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
-  // (table) => [primaryKey({ columns: [table.bookmarkId, table.tagId] })],
+  (table) => [primaryKey({ columns: [table.bookmarkId, table.tagId] })],
 );
 
 export const bookmarkTagRelations = relations(bookmarkTag, ({ one }) => ({
@@ -41,4 +51,3 @@ export const bookmarkTagRelations = relations(bookmarkTag, ({ one }) => ({
 }));
 
 export const bookmarkTagSelectSchema = createSelectSchema(bookmarkTag);
-export const bookmarkTagInsertSchema = createInsertSchema(bookmarkTag);

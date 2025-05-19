@@ -5,10 +5,10 @@ import { db } from "../db";
 import { tag, tagInsertSchema, tagUpdateSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import {
-  orderDirections,
   type OrderDirection,
   type PaginatedSuccessResponse,
   type SuccessResponse,
+  orderDirections,
 } from "../types";
 import type { TagType } from "../types/schema.types";
 import { getPagination, getUserId } from "../utils";
@@ -96,6 +96,13 @@ router.get("/", async (c) => {
     where: eq(tag.userId, userId),
     columns: { userId: false },
     orderBy: orderBy === "desc" ? desc(tag.updatedAt) : asc(tag.updatedAt),
+    with: {
+      bookmarkTag: {
+        columns: {
+          bookmarkId: true,
+        },
+      },
+    },
     offset,
     limit,
   });
@@ -108,7 +115,10 @@ router.get("/", async (c) => {
     {
       success: true,
       message: "Successfully fetched all tags",
-      data,
+      data: data.map(({ bookmarkTag, ...tag }) => ({
+        ...tag,
+        useCount: bookmarkTag.length,
+      })),
       pagination: {
         page,
         limit,
@@ -137,7 +147,11 @@ router.get("/search", async (c) => {
     );
   }
 
-  let data: Omit<TagType, "userId"> | undefined;
+  let data: Omit<TagType, "userId">[] | undefined;
+
+  const rawLimit = c.req.param("limit");
+  const queryLimit = Number.parseInt(rawLimit ?? "5", 10);
+  const safeLimit = Number.isNaN(queryLimit) ? 5 : queryLimit;
 
   if (id) {
     const parsedId = Number.parseInt(id);
@@ -146,15 +160,17 @@ router.get("/search", async (c) => {
       throw new ApiError(400, "Tag ID must be a valid number.");
     }
 
-    data = await db.query.tag.findFirst({
+    data = await db.query.tag.findMany({
       where: and(eq(tag.userId, userId), eq(tag.id, parsedId)),
+      limit: safeLimit,
       columns: {
         userId: false,
       },
     });
   } else if (name) {
-    data = await db.query.tag.findFirst({
+    data = await db.query.tag.findMany({
       where: and(eq(tag.userId, userId), ilike(tag.name, `%${name}%`)),
+      limit: safeLimit,
       columns: {
         userId: false,
       },
@@ -167,7 +183,7 @@ router.get("/search", async (c) => {
 
   console.log(data);
 
-  return c.json<SuccessResponse<Omit<TagType, "userId">>>(
+  return c.json<SuccessResponse<Omit<TagType, "userId">[]>>(
     {
       success: true,
       message: "Successfully fetched tag",

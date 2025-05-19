@@ -26,12 +26,14 @@
     "drizzle-zod": "^0.7.1",
     "hono": "^4.7.9",
     "imagekit": "^6.0.0",
+    "lodash.kebabcase": "^4.1.1",
     "tinycolor2": "^1.6.0",
     "ws": "^8.18.2"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@hono/zod-validator": "^0.5.0",
+    "@types/lodash.kebabcase": "^4.1.9",
     "@types/tinycolor2": "^1.4.6",
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.1",

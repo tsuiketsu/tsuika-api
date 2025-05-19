@@ -1,21 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
-import { useId } from "hono/jsx";
 import type { z } from "zod";
 import { db } from "../db";
-import {
-  bookmark,
-  bookmarkInsertSchema,
-  bookmarkSelectSchema,
-} from "../db/schema/bookmark.schema";
+import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
+import { bookmark } from "../db/schema/bookmark.schema";
+import { tagSelectSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
-import type {
-  ImageKitReponse,
-  PaginatedSuccessResponse,
-  SuccessResponse,
-} from "../types";
+import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
-import { getPagination, getUserId } from "../utils";
+import { getOrderDirection, getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
@@ -79,26 +72,75 @@ const setBookmarkFlag = async (
   );
 };
 
+const bookmarkWithTags = {
+  bookmarkTag: {
+    columns: { appliedAt: true },
+    with: {
+      tag: {
+        columns: {
+          name: true,
+          color: true,
+        },
+      },
+    },
+  },
+} satisfies NonNullable<
+  Parameters<(typeof db)["query"]["bookmark"]["findFirst" | "findMany"]>[0]
+>["with"];
+
+const something = tagSelectSchema.pick({
+  id: true,
+  name: true,
+  color: true,
+});
+
+const insertTags = async (
+  userId: string,
+  bookmarkId: number | undefined,
+  tags:
+    | z.infer<
+        ReturnType<
+          typeof tagSelectSchema.pick<{ id: true; name: true; color: true }>
+        >
+      >[]
+    | undefined,
+): Promise<boolean> => {
+  let tagsInserted = false;
+  if (bookmarkId && tags && tags.length > 0) {
+    const response = await db
+      .insert(bookmarkTag)
+      .values(
+        tags.map(({ id }) => ({ userId, tagId: id, bookmarkId: bookmarkId })),
+      )
+      .returning({ bookmarkId: bookmarkTag.bookmarkId });
+
+    if (response.length > 0 && response[0] != null) {
+      tagsInserted = true;
+    }
+  }
+  return tagsInserted;
+};
+
 // -----------------------------------------
 // ADD NEW BOOKMARK
 // -----------------------------------------
 router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
-  const { title, url, description } = c.req.valid("json");
+  const { title, url, description, tags } = c.req.valid("json");
 
   if (!title || !url) {
     throw new ApiError(400, "Title & url are required");
   }
 
-  const user = c.get("user");
+  const userId = await getUserId(c);
 
-  if (!user) {
-    throw new ApiError(401, "Failed to add bookmark, user not found");
-  }
+  // NOTE: Whole thing is not very robust, db.transaction is better choice
+  // but that doesn't work with neon-http, also db.batch which is not
+  // very ideal for this situation since I need bookmarkId
 
   const data: BookmarkType[] = await db
     .insert(bookmark)
     .values({
-      userId: user.id,
+      userId: userId,
       title,
       description,
       url,
@@ -106,15 +148,18 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
     })
     .returning();
 
-  if (data.length === 0 || data[0] == null) {
+  if (data.length === 0 || typeof data[0] === "undefined") {
     throw new ApiError(502, "Failed to add bookmark");
   }
+
+  const bookmarkId = data[0].id;
+  const tagsInserted = await insertTags(userId, bookmarkId, tags);
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
       success: true,
       message: "Bookmark added successfully 🔖",
-      data: data[0],
+      data: Object.assign({}, data[0], tagsInserted ? { tags } : {}),
     },
     200,
   );
@@ -127,8 +172,17 @@ router.get("/", async (c) => {
   const userId = await getUserId(c);
   const { page, limit, offset } = getPagination(c.req.query());
 
+  const orderBy = getOrderDirection(c.req.query());
+
   const data = await db.query.bookmark.findMany({
     where: eq(bookmark.userId, userId),
+    with: bookmarkWithTags,
+    orderBy: ({ updatedAt }, { desc, asc }) => {
+      if (orderBy) {
+        return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
+      }
+      return desc(updatedAt);
+    },
     limit,
     offset,
   });
@@ -140,7 +194,10 @@ router.get("/", async (c) => {
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
     success: true,
     message: "Successfully fetched all bookmarks",
-    data,
+    data: data.map(({ bookmarkTag, ...rest }) => ({
+      ...rest,
+      tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
+    })),
     pagination: {
       page,
       limit,
@@ -168,17 +225,30 @@ router.get(":id", async (c) => {
 
   const data = await db.query.bookmark.findFirst({
     where: and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)),
+    with: bookmarkWithTags,
   });
 
   if (!data) {
     throw new ApiError(400, "Bookmark not found");
   }
 
+  const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
+    ...tag,
+    appliedAt,
+  }));
+
+  const updatedData = {
+    ...data,
+    tags,
+  };
+
+  const { bookmarkTag, ...rest } = updatedData;
+
   return c.json<SuccessResponse<BookmarkType>>(
     {
       success: true,
+      data: rest,
       message: "Successfully fetched bookmark",
-      data: bookmarkSelectSchema.parse(data),
     },
     200,
   );
@@ -187,55 +257,50 @@ router.get(":id", async (c) => {
 // -----------------------------------------
 // UPDATE BOOKMARK
 // -----------------------------------------
-router.put(
-  ":id",
-  zValidator(
-    "json",
-    bookmarkInsertSchema.pick({ title: true, url: true, description: true }),
-  ),
-  async (c) => {
-    const userId = c.get("user")?.id;
+router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
+  const userId = c.get("user")?.id;
 
-    if (!userId) {
-      throw new ApiError(401, "Unauthorized access detected");
-    }
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized access detected");
+  }
 
-    const bookmarkId = await verifyBookmarkExistence(c);
+  const bookmarkId = await verifyBookmarkExistence(c);
 
-    const { title, url, description } = c.req.valid("json");
+  const { title, url, description, tags } = c.req.valid("json");
 
-    const user = c.get("user");
+  const user = c.get("user");
 
-    if (!user) {
-      throw new ApiError(401, "Failed to add bookmark, user not found");
-    }
+  if (!user) {
+    throw new ApiError(401, "Failed to add bookmark, user not found");
+  }
 
-    const data: BookmarkType[] = await db
-      .update(bookmark)
-      .set({
-        title,
-        description,
-        url,
-        faviconUrl: getFavIcon(url),
-        updatedAt: sql`NOW()`,
-      })
-      .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
-      .returning();
+  const data: BookmarkType[] = await db
+    .update(bookmark)
+    .set({
+      title,
+      description,
+      url,
+      faviconUrl: getFavIcon(url),
+      updatedAt: sql`NOW()`,
+    })
+    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
+    .returning();
 
-    if (data.length === 0 || data[0] == null) {
-      throw new ApiError(502, "Failed to updated bookmark");
-    }
+  if (data.length === 0 || data[0] == null) {
+    throw new ApiError(502, "Failed to updated bookmark");
+  }
 
-    return c.json<SuccessResponse<BookmarkType>>(
-      {
-        success: true,
-        message: "Bookmark updated successfully 🔖",
-        data: data[0],
-      },
-      200,
-    );
-  },
-);
+  const tagsInserted = await insertTags(userId, bookmarkId, tags);
+
+  return c.json<SuccessResponse<BookmarkType>>(
+    {
+      success: true,
+      message: "Bookmark updated successfully 🔖",
+      data: Object.assign({}, data[0], tagsInserted ? { tags } : {}),
+    },
+    200,
+  );
+});
 
 // -----------------------------------------
 // DELETE BOOKMARK
