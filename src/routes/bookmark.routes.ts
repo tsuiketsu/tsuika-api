@@ -1,13 +1,18 @@
-import { and, eq, sql } from "drizzle-orm";
+import { type SQL, and, eq, isNull, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { bookmark } from "../db/schema/bookmark.schema";
+import { folder } from "../db/schema/folder.schema";
 import type { tagSelectSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
-import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
+import {
+  type BookmarkType,
+  type FolderType,
+  createBookmarkSchema,
+} from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
@@ -171,6 +176,88 @@ router.get("/", async (c) => {
 
   const data = await db.query.bookmark.findMany({
     where: eq(bookmark.userId, userId),
+    with: bookmarkWithTags,
+    orderBy: ({ updatedAt }, { desc, asc }) => {
+      if (orderBy) {
+        return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
+      }
+      return desc(updatedAt);
+    },
+    limit,
+    offset,
+  });
+
+  if (data.length === 0) {
+    throw new ApiError(400, "No tags found");
+  }
+
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
+    success: true,
+    message: "Successfully fetched all bookmarks",
+    data: data.map(({ bookmarkTag, ...rest }) => ({
+      ...rest,
+      tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
+    })),
+    pagination: {
+      page,
+      limit,
+      total: data.length,
+      hasMore: data.length === limit,
+    },
+  });
+});
+
+// -----------------------------------------
+// GET BOOKMARKS BY FOLDER NAME
+// -----------------------------------------
+router.get(":folder-slug", async (c) => {
+  const userId = await getUserId(c);
+  const folderName = c.req.param("folder-slug");
+
+  if (!folderName || folderName.trim() === "") {
+    throw new ApiError(400, "Invalid folder name", "INVALID_FOLDER_NAME");
+  }
+
+  let condition: SQL<unknown> | undefined;
+
+  switch (folderName.toLowerCase().trim()) {
+    case "archived":
+      condition = eq(bookmark.isArchived, true);
+      break;
+    case "favorites":
+      condition = eq(bookmark.isFavourite, true);
+      break;
+    case "unsorted":
+      condition = isNull(bookmark.folderId);
+      break;
+    default: {
+      const folderObj = await db.query.folder.findFirst({
+        where: and(
+          eq(folder.userId, userId),
+          eq(folder.slug, folderName.trim()),
+        ),
+        columns: {
+          id: true,
+        },
+      });
+
+      if (!folderObj?.id) {
+        throw new ApiError(
+          404,
+          `Folder with slug ${folderName} not found`,
+          "FOLDER_NOT_FOUND",
+        );
+      }
+
+      condition = eq(bookmark.folderId, folderObj.id);
+    }
+  }
+
+  const { page, limit, offset } = getPagination(c.req.query());
+  const orderBy = getOrderDirection(c.req.query());
+
+  const data = await db.query.bookmark.findMany({
+    where: and(eq(bookmark.userId, userId), condition),
     with: bookmarkWithTags,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {

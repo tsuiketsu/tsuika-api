@@ -1,6 +1,7 @@
 import type { PublicKeyCredentialUserEntity } from "better-auth/client/plugins";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
+import kebabCase from "lodash.kebabcase";
 import { db } from "../db";
 import { folder } from "../db/schema/folder.schema";
 import { folderInsertSchema } from "../db/schema/folder.schema";
@@ -162,6 +163,7 @@ router.post(
         userId,
         name,
         description,
+        slug: kebabCase(name),
       })
       .returning();
 
@@ -205,6 +207,7 @@ router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
     .set({
       name,
       description,
+      slug: kebabCase(name),
     })
     .where(and(eq(folder.userId, userId), eq(folder.id, folderId)))
     .returning();

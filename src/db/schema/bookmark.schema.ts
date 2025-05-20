@@ -33,6 +33,11 @@ export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
     relationName: "owner",
   }),
 
+  bookarmFolder: one(folder, {
+    fields: [bookmark.folderId],
+    references: [folder.id],
+  }),
+
   bookmarkTag: many(bookmarkTag),
 }));
 
