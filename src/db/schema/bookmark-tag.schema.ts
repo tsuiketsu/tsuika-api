@@ -1,9 +1,7 @@
-import { eq, relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   integer,
-  json,
   pgTable,
-  pgView,
   primaryKey,
   text,
   timestamp,

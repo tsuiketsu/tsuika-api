@@ -1,8 +1,10 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import * as authSchema from "./schema/auth.schema";
+import * as bookmarkFolderSchema from "./schema/bookmark-folder.schema";
 import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
+import * as folderSchema from "./schema/folder.schema";
 import * as profileSchema from "./schema/profile.schema";
 import * as tagSchema from "./schema/tag.schema";
 
@@ -36,6 +38,8 @@ export const db = drizzleHttp({
     ...bookmarkSchema,
     ...tagSchema,
     ...bookmarkTagSchema,
+    ...folderSchema,
+    ...bookmarkFolderSchema,
   },
   client: sql,
   casing: "snake_case",
