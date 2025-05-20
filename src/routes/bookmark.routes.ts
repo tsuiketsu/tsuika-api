@@ -119,7 +119,7 @@ const insertTags = async (
 // ADD NEW BOOKMARK
 // -----------------------------------------
 router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
-  const { title, url, description, tags } = c.req.valid("json");
+  const { folderId, title, url, description, tags } = c.req.valid("json");
 
   if (!title || !url) {
     throw new ApiError(400, "Title & url are required");
@@ -134,6 +134,7 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   const data: BookmarkType[] = await db
     .insert(bookmark)
     .values({
+      folderId,
       userId: userId,
       title,
       description,
@@ -260,7 +261,7 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
 
   const bookmarkId = await verifyBookmarkExistence(c);
 
-  const { title, url, description, tags } = c.req.valid("json");
+  const { folderId, title, url, description, tags } = c.req.valid("json");
 
   const user = c.get("user");
 
@@ -271,6 +272,7 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
   const data: BookmarkType[] = await db
     .update(bookmark)
     .set({
+      folderId,
       title,
       description,
       url,

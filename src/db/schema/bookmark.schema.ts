@@ -1,16 +1,20 @@
 import { relations } from "drizzle-orm";
-import { boolean, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
 import { timestamps } from "./constants";
+import { folder } from "./folder.schema";
 
 export const bookmark = pgTable("bookmarks", {
   id: serial("id").primaryKey(),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  folderId: integer("folder_id").references(() => folder.id, {
+    onDelete: "set null",
+  }),
   title: text("title").notNull(),
   description: text("description"),
   url: text("url").notNull(),
@@ -34,6 +38,7 @@ export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
 
 export const bookmarkSelectSchema = createSelectSchema(bookmark);
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
+  folderId: z.number().optional(),
   title: z.string().min(1, "Title is required").max(100),
   description: z.string().max(500).optional(),
   url: z.string().url("Must be a valid URL"),

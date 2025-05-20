@@ -1,3 +1,4 @@
+import type { PublicKeyCredentialUserEntity } from "better-auth/client/plugins";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { db } from "../db";
@@ -61,8 +62,40 @@ const verifyFolderExistance = async (folderId: number) => {
 // -----------------------------------------
 // GET ALL FOLDERS
 // -----------------------------------------
+router.get("/all", async (c) => {
+  const userId = await getUserId(c);
+
+  const data = await db.query.folder.findMany({
+    where: (folder, { eq }) => eq(folder.userId, userId),
+    columns: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (data.length === 0) {
+    throw new ApiError(
+      404,
+      "No folders found for the current user",
+      "FOLDER_NOT_FOUND",
+    );
+  }
+
+  return c.json<SuccessResponse<Pick<FolderType, "id" | "name">[]>>(
+    {
+      success: true,
+      message: "Successfully fetched folders",
+      data,
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
+// GET FOLDERS
+// -----------------------------------------
 router.get("/", async (c) => {
-  const { page, limit, offset } = getPagination(c.req.param());
+  const { page, limit, offset } = getPagination(c.req.query());
 
   const userId = await getUserId(c);
 

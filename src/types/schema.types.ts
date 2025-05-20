@@ -9,6 +9,7 @@ import { tagSelectSchema } from "../db/schema/tag.schema";
 
 export const createBookmarkSchema = bookmarkInsertSchema
   .pick({
+    folderId: true,
     title: true,
     description: true,
     url: true,
