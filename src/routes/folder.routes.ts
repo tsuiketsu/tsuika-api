@@ -138,7 +138,7 @@ router.post(
   zValidator("json", folderInsertSchema),
   validateFolderName,
   async (c) => {
-    const { name, description } = await c.req.json();
+    const { name, description } = c.req.valid("json");
 
     const userId = await getUserId(c);
 
@@ -161,8 +161,8 @@ router.post(
       .insert(folder)
       .values({
         userId,
-        name,
-        description,
+        name: name.trim(),
+        description: description?.trim(),
         slug: kebabCase(name),
       })
       .returning();
@@ -205,8 +205,8 @@ router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
   const data = await db
     .update(folder)
     .set({
-      name,
-      description,
+      name: name.trim(),
+      description: description?.trim(),
       slug: kebabCase(name),
     })
     .where(and(eq(folder.userId, userId), eq(folder.id, folderId)))
