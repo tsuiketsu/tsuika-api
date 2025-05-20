@@ -4,6 +4,7 @@ import {
   bookmarkInsertSchema,
   type bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
+import type { folderSelectSchema } from "../db/schema/folder.schema";
 import { tagSelectSchema } from "../db/schema/tag.schema";
 
 export const createBookmarkSchema = bookmarkInsertSchema
@@ -26,3 +27,5 @@ export const bookmarkTagInsertSchema = z.object({
   bookmarkId: z.number(),
   tagIds: z.array(z.number()),
 });
+
+export type FolderType = z.infer<typeof folderSelectSchema>;

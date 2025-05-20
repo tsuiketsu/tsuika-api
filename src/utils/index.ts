@@ -1,5 +1,9 @@
 import type { Context } from "hono";
-import { DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT } from "../constants";
+import {
+  DEFAULT_QUERY_LIMIT,
+  INVALID_CHARS,
+  MAX_QUERY_LIMIT,
+} from "../constants";
 import type { AuthType } from "../lib/create-app";
 import { type OrderDirection, orderDirections } from "../types";
 import { ApiError } from "./api-error";
@@ -38,4 +42,8 @@ export const getOrderDirection = (
   }
 
   return orderBy;
+};
+
+export const isInvalidName = (name: string) => {
+  return INVALID_CHARS.test(name);
 };

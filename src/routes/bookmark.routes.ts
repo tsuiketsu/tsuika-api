@@ -4,7 +4,7 @@ import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { bookmark } from "../db/schema/bookmark.schema";
-import { tagSelectSchema } from "../db/schema/tag.schema";
+import type { tagSelectSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
@@ -87,12 +87,6 @@ const bookmarkWithTags = {
 } satisfies NonNullable<
   Parameters<(typeof db)["query"]["bookmark"]["findFirst" | "findMany"]>[0]
 >["with"];
-
-const something = tagSelectSchema.pick({
-  id: true,
-  name: true,
-  color: true,
-});
 
 const insertTags = async (
   userId: string,
