@@ -13,7 +13,7 @@ export const bookmark = pgTable("bookmarks", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   folderId: integer("folder_id").references(() => folder.id, {
-    onDelete: "set null",
+    onDelete: "cascade",
   }),
   title: text("title").notNull(),
   description: text("description"),
