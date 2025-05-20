@@ -24,11 +24,11 @@ app.use(
 app.use("*", requireAuth);
 
 // Routes imports
-import { auth, bookmark, bookmarkTag, profile, tag } from "./routes";
+import * as allRoutes from "./routes";
+
+const { auth, ...routes } = allRoutes;
 
 app.route("/api", auth);
-
-const routes = { profile, bookmark, tag, bookmarkTag } as const;
 
 for (const [key, value] of Object.entries(routes)) {
   app.basePath("/api/v1").route(`/${kebabCase(key)}s`, value);
