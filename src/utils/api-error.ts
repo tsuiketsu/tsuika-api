@@ -5,6 +5,7 @@ class ApiError extends HTTPException {
   constructor(
     statusCode: ContentfulStatusCode,
     message = "An error occurred",
+    code?: string,
     errors: Error[] = [],
   ) {
     super(statusCode, {
@@ -12,6 +13,7 @@ class ApiError extends HTTPException {
         JSON.stringify({
           success: false,
           message,
+          code,
           data: null,
           errors: errors.map((e) => ({
             message: e.message,
