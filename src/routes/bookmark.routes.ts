@@ -5,7 +5,7 @@ import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { bookmark } from "../db/schema/bookmark.schema";
 import { folder } from "../db/schema/folder.schema";
-import type { tagSelectSchema } from "../db/schema/tag.schema";
+import { tag, type tagSelectSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import {
@@ -208,11 +208,70 @@ router.get("/", async (c) => {
 });
 
 // -----------------------------------------
-// GET BOOKMARKS BY FOLDER NAME
+// GET BOOKMARKS BY TAG
 // -----------------------------------------
-router.get(":folder-slug", async (c) => {
+router.get("/tag/:tagSlug", async (c) => {
   const userId = await getUserId(c);
-  const folderName = c.req.param("folder-slug");
+  const tagName = c.req.param("tagSlug");
+
+  if (!tagName || tagName.trim() === "") {
+    throw new ApiError(400, "Invalid tag name", "INVALID_PARAMETERS");
+  }
+
+  const tagData = await db.query.tag.findFirst({
+    where: and(eq(tag.userId, userId), eq(tag.name, tagName)),
+    columns: {
+      id: true,
+    },
+  });
+
+  if (!tagData) {
+    throw new ApiError(
+      400,
+      `Tag with tagname ${tagName} not found`,
+      "INVALID_TAG_NAME",
+    );
+  }
+
+  const { page, limit, offset } = getPagination(c.req.query());
+
+  const data = await db.query.bookmarkTag.findMany({
+    where: and(
+      eq(bookmarkTag.userId, userId),
+      eq(bookmarkTag.tagId, tagData.id),
+    ),
+    with: { bookmark: true },
+    limit,
+    offset,
+  });
+
+  if (!data || data.length === 0) {
+    throw new ApiError(
+      400,
+      `No bookmarks associated with tag ${tagName}`,
+      "BOOKMARK_NOT_FOUND",
+    );
+  }
+
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
+    success: true,
+    data: data.map(({ bookmark }) => bookmark),
+    message: "Successfully fetched bookmarks",
+    pagination: {
+      page,
+      limit,
+      total: data.length,
+      hasMore: data.length === limit,
+    },
+  });
+});
+
+// -----------------------------------------
+// GET BOOKMARKS BY FOLDER SLUG
+// -----------------------------------------
+router.get("/folder/:folderSlug", async (c) => {
+  const userId = await getUserId(c);
+  const folderName = c.req.param("folderSlug");
 
   if (!folderName || folderName.trim() === "") {
     throw new ApiError(400, "Invalid folder name", "INVALID_FOLDER_NAME");
@@ -270,7 +329,11 @@ router.get(":folder-slug", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(400, "No tags found");
+    throw new ApiError(
+      400,
+      `No bookmarks exists in folder ${folderName}`,
+      "BOOKMARK_NOT_FOUND",
+    );
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
@@ -311,7 +374,11 @@ router.get(":id", async (c) => {
   });
 
   if (!data) {
-    throw new ApiError(400, "Bookmark not found");
+    throw new ApiError(
+      400,
+      `Bookmark with ${bookmarkId} not found`,
+      "BOOKMARK_NOT_FOUND",
+    );
   }
 
   const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
