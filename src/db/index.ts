@@ -4,7 +4,6 @@ import * as authSchema from "./schema/auth.schema";
 import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
 import * as folderSchema from "./schema/folder.schema";
-import * as gitRepoSchema from "./schema/git-repo.schema";
 import * as profileSchema from "./schema/profile.schema";
 import * as tagSchema from "./schema/tag.schema";
 
@@ -39,7 +38,6 @@ export const db = drizzleHttp({
     ...tagSchema,
     ...bookmarkTagSchema,
     ...folderSchema,
-    ...gitRepoSchema,
   },
   client: sql,
   casing: "snake_case",
