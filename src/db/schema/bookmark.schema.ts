@@ -15,7 +15,7 @@ export const bookmark = pgTable("bookmarks", {
   folderId: integer("folder_id").references(() => folder.id, {
     onDelete: "cascade",
   }),
-  title: text("title").notNull(),
+  title: text("title").notNull().default("Untitled"),
   description: text("description"),
   url: text("url").notNull(),
   faviconUrl: text("favicon_url"),
@@ -44,7 +44,7 @@ export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
 export const bookmarkSelectSchema = createSelectSchema(bookmark);
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   folderId: z.number().optional(),
-  title: z.string().min(1, "Title is required").max(100),
+  title: z.string().min(1, "Title is required").max(100).optional(),
   description: z.string().max(500).optional(),
   url: z.string().url("Must be a valid URL"),
   faviconUrl: z.string().optional(),

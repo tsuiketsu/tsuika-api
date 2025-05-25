@@ -6,21 +6,26 @@ export type SuccessResponse<T = void> = {
   // biome-ignore lint/complexity/noBannedTypes:
 } & (T extends void ? {} : { data: T });
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export type PaginatedSuccessResponse<T> = SuccessResponse<T> & {
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
+  pagination: Pagination;
 };
 
-export type ImageKitReponse = {
+export interface CustomResponse {
   status: ContentfulStatusCode;
   message: string;
+}
+
+export interface ImageKitReponse extends CustomResponse {
   url: string | null;
   fileId: string | null;
-};
+}
 
 export const orderDirections = ["asc", "desc"] as const;
 export type OrderDirection = (typeof orderDirections)[number];

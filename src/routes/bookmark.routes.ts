@@ -1,3 +1,4 @@
+import { fetchLinkPreview } from "@/utils/ link-preview";
 import { type SQL, and, eq, isNull, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { z } from "zod";
@@ -8,11 +9,7 @@ import { folder } from "../db/schema/folder.schema";
 import { tag, type tagSelectSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
-import {
-  type BookmarkType,
-  type FolderType,
-  createBookmarkSchema,
-} from "../types/schema.types";
+import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
@@ -124,10 +121,10 @@ const insertTags = async (
 // ADD NEW BOOKMARK
 // -----------------------------------------
 router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
-  const { folderId, title, url, description, tags } = c.req.valid("json");
+  const { folderId, title, url, tags } = c.req.valid("json");
 
-  if (!title || !url) {
-    throw new ApiError(400, "Title & url are required");
+  if (!url) {
+    throw new ApiError(400, "Url is required", "INVALID_PARAMETERS");
   }
 
   const userId = await getUserId(c);
@@ -136,15 +133,22 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
 
+  const meta = await fetchLinkPreview(url);
+
+  if (!meta.data) {
+    console.error(`Fialed to fetch metadata of url ${url}`, meta.message || "");
+  }
+
   const data: BookmarkType[] = await db
     .insert(bookmark)
     .values({
       folderId,
       userId: userId,
-      title,
-      description,
+      title: meta.data?.title || "Untitled",
+      description: meta.data?.description || "",
       url,
-      faviconUrl: getFavIcon(url),
+      thumbnail: meta.data?.images?.[0] ?? null,
+      faviconUrl: meta.data?.favicons?.[0] ?? getFavIcon(url),
     })
     .returning();
 
@@ -423,14 +427,21 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
     throw new ApiError(401, "Failed to add bookmark, user not found");
   }
 
+  const meta = await fetchLinkPreview(url);
+
+  if (!meta.data) {
+    console.error(`Fialed to fetch metadata of url ${url}`, meta.message || "");
+  }
+
   const data: BookmarkType[] = await db
     .update(bookmark)
     .set({
       folderId,
-      title,
-      description,
+      title: title ?? (meta.data?.title || "Untitled"),
+      description: description ?? (meta.data?.description || ""),
       url,
-      faviconUrl: getFavIcon(url),
+      thumbnail: meta.data?.images?.[0] ?? null,
+      faviconUrl: meta.data?.favicons?.[0] ?? getFavIcon(url),
       updatedAt: sql`NOW()`,
     })
     .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
