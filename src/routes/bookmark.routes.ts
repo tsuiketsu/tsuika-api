@@ -2,7 +2,7 @@ import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { getCleanUrl } from "@/utils/parse-url";
-import { type SQL, and, eq, isNull, sql } from "drizzle-orm";
+import { type SQL, and, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
 import type { z } from "zod";
@@ -357,10 +357,23 @@ router.get("/folder/:folderSlug", async (c) => {
   }
 
   const { page, limit, offset } = getPagination(c.req.query());
+
+  // Add optional bookmark query by title or url
+  const bookmarkQuery = c.req.query("query");
+
+  let queryCondition: SQL<unknown> | undefined = undefined;
+
+  if (bookmarkQuery && bookmarkQuery.trim() !== "") {
+    queryCondition = or(
+      ilike(bookmark.title, `%${bookmarkQuery}%`),
+      ilike(bookmark.url, `%${bookmarkQuery}%`),
+    );
+  }
+
   const orderBy = getOrderDirection(c.req.query());
 
   const data = await db.query.bookmark.findMany({
-    where: and(eq(bookmark.userId, userId), condition),
+    where: and(eq(bookmark.userId, userId), condition, queryCondition),
     with: bookmarkWithTags,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
