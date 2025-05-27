@@ -1,6 +1,10 @@
-import { fetchLinkPreview } from "@/utils/ link-preview";
+import type { LinkPreviewResponsse } from "@/types/link-preview.types";
+import { getImageMedatata } from "@/utils/image-metadata";
+import { fetchLinkPreview } from "@/utils/link-preview";
+import { getCleanUrl } from "@/utils/parse-url";
 import { type SQL, and, eq, isNull, sql } from "drizzle-orm";
 import type { Context } from "hono";
+import type { Metadata } from "sharp";
 import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
@@ -21,8 +25,34 @@ const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
 };
 
-const verifyBookmarkExistence = async (c: Context) => {
+const getBookmarkIdParam = (c: Context) => {
   const id = Number.parseInt(c.req.param("id"));
+
+  if (!id) {
+    throw new ApiError(400, "Bookmark ID is required");
+  }
+
+  return id;
+};
+
+const getBookmarkById = async (c: Context) => {
+  const id = getBookmarkIdParam(c);
+
+  const prev = await db.query.bookmark.findFirst({
+    where: and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, id)),
+
+    columns: { id: true, url: true },
+  });
+
+  if (!prev) {
+    throw new ApiError(404, `Bookmark with id ${id} does not exists`);
+  }
+
+  return { ...prev, url: prev.url ?? "" };
+};
+
+const getBookmarkId = async (c: Context) => {
+  const id = getBookmarkIdParam(c);
 
   if (!id) {
     throw new ApiError(400, "Bookmark ID is required");
@@ -32,7 +62,6 @@ const verifyBookmarkExistence = async (c: Context) => {
 
   const isBookmarkExists = await db.query.bookmark.findFirst({
     where: and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, id)),
-
     columns: { id: true },
   });
 
@@ -47,7 +76,7 @@ const setBookmarkFlag = async (
   c: Context,
   field: "isPinned" | "isArchived" | "isFavourite",
 ) => {
-  const bookmarkId = await verifyBookmarkExistence(c);
+  const bookmarkId = await getBookmarkId(c);
   const { state } = await c.req.json();
 
   if (state == null) {
@@ -133,10 +162,19 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
 
-  const meta = await fetchLinkPreview(url);
+  const siteMeta = await fetchLinkPreview(url);
 
-  if (!meta.data) {
-    console.error(`Fialed to fetch metadata of url ${url}`, meta.message || "");
+  if (!siteMeta.data) {
+    console.error(
+      `Fialed to fetch metadata of url ${url}`,
+      siteMeta.message || "",
+    );
+  }
+  const image = siteMeta.data?.images?.[0];
+  let imageMeta: Metadata | null = null;
+
+  if (image && image.trim() !== "") {
+    imageMeta = await getImageMedatata(image);
   }
 
   const data: BookmarkType[] = await db
@@ -144,11 +182,13 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
     .values({
       folderId,
       userId: userId,
-      title: meta.data?.title || "Untitled",
-      description: meta.data?.description || "",
+      title: siteMeta.data?.title || "Untitled",
+      description: siteMeta.data?.description || "",
       url,
-      thumbnail: meta.data?.images?.[0] ?? null,
-      faviconUrl: meta.data?.favicons?.[0] ?? getFavIcon(url),
+      thumbnail: siteMeta.data?.images?.[0] ?? null,
+      faviconUrl: siteMeta.data?.favicons?.[0] ?? getFavIcon(url),
+      thumbnailHeight: imageMeta?.height,
+      thumbnailWidth: imageMeta?.width,
     })
     .returning();
 
@@ -417,7 +457,8 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
     throw new ApiError(401, "Unauthorized access detected");
   }
 
-  const bookmarkId = await verifyBookmarkExistence(c);
+  // Get previous bookmark id and url
+  const prev = await getBookmarkById(c);
 
   const { folderId, title, url, description, tags } = c.req.valid("json");
 
@@ -427,31 +468,51 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
     throw new ApiError(401, "Failed to add bookmark, user not found");
   }
 
-  const meta = await fetchLinkPreview(url);
+  let siteMeta: LinkPreviewResponsse | undefined;
 
-  if (!meta.data) {
-    console.error(`Fialed to fetch metadata of url ${url}`, meta.message || "");
+  // If current and prev.url same don't fetch site's metadata
+  if (getCleanUrl(prev.url) !== getCleanUrl(url)) {
+    siteMeta = await fetchLinkPreview(url);
   }
+
+  if (!siteMeta?.data) {
+    console.error(
+      `Fialed to fetch metadata of url ${url}`,
+      siteMeta?.message || "",
+    );
+  }
+
+  const image = siteMeta?.data?.images?.[0] || undefined;
+  let imageMeta: Metadata | null = null;
+
+  // Fetch image's metadata
+  if (image && image.trim() !== "") {
+    imageMeta = await getImageMedatata(image);
+  }
+
+  const newThumbnail = siteMeta?.data?.images?.[0];
 
   const data: BookmarkType[] = await db
     .update(bookmark)
     .set({
       folderId,
-      title: title ?? (meta.data?.title || "Untitled"),
-      description: description ?? (meta.data?.description || ""),
+      title: title ?? (siteMeta?.data?.title || "Untitled"),
+      description: description ?? (siteMeta?.data?.description || ""),
       url,
-      thumbnail: meta.data?.images?.[0] ?? null,
-      faviconUrl: meta.data?.favicons?.[0] ?? getFavIcon(url),
+      faviconUrl: siteMeta?.data?.favicons?.[0] ?? getFavIcon(url),
       updatedAt: sql`NOW()`,
+      thumbnailHeight: imageMeta?.height,
+      thumbnailWidth: imageMeta?.width,
+      ...(newThumbnail ? { thumbnail: newThumbnail } : {}),
     })
-    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
+    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, prev.id)))
     .returning();
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to updated bookmark");
   }
 
-  const tagsInserted = await insertTags(userId, bookmarkId, tags);
+  const tagsInserted = await insertTags(userId, prev.id, tags);
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
@@ -473,7 +534,7 @@ router.delete(":id", async (c) => {
     throw new ApiError(401, "Unauthorized access detected");
   }
 
-  const bookmarkId = await verifyBookmarkExistence(c);
+  const bookmarkId = await getBookmarkId(c);
 
   // Remove bookmark from database
   const data: { deleteId: number }[] = await db
@@ -506,7 +567,7 @@ router.patch(":id/thumbnail", async (c) => {
     throw new ApiError(401, "Unauthorized access detected");
   }
 
-  const bookmarkId = await verifyBookmarkExistence(c);
+  const bookmarkId = await getBookmarkId(c);
 
   // Verify if thumbnail path provided
   const body = await c.req.parseBody();

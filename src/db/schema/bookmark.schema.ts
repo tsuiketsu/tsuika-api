@@ -20,6 +20,8 @@ export const bookmark = pgTable("bookmarks", {
   url: text("url").notNull(),
   faviconUrl: text("favicon_url"),
   thumbnail: text("thumbnail"),
+  thumbnailWidth: integer("thumbnail_width"),
+  thumbnailHeight: integer("thumbnail_height"),
   isPinned: boolean().default(false),
   isFavourite: boolean().default(false),
   isArchived: boolean().default(false),
@@ -44,8 +46,8 @@ export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
 export const bookmarkSelectSchema = createSelectSchema(bookmark);
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   folderId: z.number().optional(),
-  title: z.string().min(1, "Title is required").max(100).optional(),
-  description: z.string().max(500).optional(),
+  title: z.string().min(1, "Title is required").max(255).optional(),
+  description: z.string().max(2000).optional(),
   url: z.string().url("Must be a valid URL"),
   faviconUrl: z.string().optional(),
   thumbnail: z.string().optional(),

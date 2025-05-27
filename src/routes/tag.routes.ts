@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import type { Context } from "hono";
+import kebabCase from "lodash.kebabcase";
 import tinycolor from "tinycolor2";
 import { db } from "../db";
 import { tag, tagInsertSchema, tagUpdateSchema } from "../db/schema/tag.schema";
@@ -65,7 +66,7 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
 
   const data: TagType[] = await db
     .insert(tag)
-    .values({ userId, name: name.toLowerCase(), color })
+    .values({ userId, name: kebabCase(name), color })
     .returning();
 
   if (data.length === 0 || data[0] == null) {
@@ -205,7 +206,7 @@ router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
   const data: TagType[] = await db
     .update(tag)
     .set({
-      name,
+      name: kebabCase(name),
       color,
       updatedAt: sql`NOW()`,
     })
