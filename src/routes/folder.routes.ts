@@ -1,7 +1,6 @@
-import type { PublicKeyCredentialUserEntity } from "better-auth/client/plugins";
+import { generatePublicId } from "@/utils/nanoid";
 import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
-import kebabCase from "lodash.kebabcase";
 import { db } from "../db";
 import { folder } from "../db/schema/folder.schema";
 import { folderInsertSchema } from "../db/schema/folder.schema";
@@ -28,20 +27,19 @@ const validateFolderName = createFieldValidator({
   },
 });
 
-const getFolderId = (c: Context) => {
-  const folderIdParam = c.req.param("id");
-  const folderId = Number.parseInt(folderIdParam || "", 10);
+const getFolderId = (c: Context): string => {
+  const folderId = c.req.param("id");
 
-  if (!folderIdParam || Number.isNaN(folderId) || folderId <= 0) {
+  if (!folderId) {
     throw new ApiError(400, "Id is not a valid number", "INVALID_FOLDER_ID");
   }
 
   return folderId;
 };
 
-const verifyFolderExistance = async (folderId: number) => {
+const verifyFolderExistance = async (folderId: string) => {
   const data = await db.query.folder.findFirst({
-    where: (folder, { eq }) => eq(folder.id, folderId),
+    where: (folder, { eq }) => eq(folder.publicId, folderId),
     columns: {
       id: true,
       name: true,
@@ -60,19 +58,26 @@ const verifyFolderExistance = async (folderId: number) => {
   return data;
 };
 
+export const folderPublicFields = {
+  id: folder.publicId,
+  name: folder.name,
+  description: folder.description,
+  createdAt: folder.createdAt,
+  updatedAt: folder.updatedAt,
+} as const;
+
 // -----------------------------------------
 // GET ALL FOLDERS
 // -----------------------------------------
 router.get("/all", async (c) => {
   const userId = await getUserId(c);
 
-  const data = await db.query.folder.findMany({
-    where: (folder, { eq }) => eq(folder.userId, userId),
-    columns: {
-      id: true,
-      name: true,
-    },
-  });
+  const data = await db
+    .select(folderPublicFields)
+    .from(folder)
+    .where(eq(folder.userId, userId));
+
+  // const data = await db.select()
 
   if (data.length === 0) {
     throw new ApiError(
@@ -100,11 +105,12 @@ router.get("/", async (c) => {
 
   const userId = await getUserId(c);
 
-  const data = await db.query.folder.findMany({
-    where: (folder, { eq }) => eq(folder.userId, userId),
-    limit,
-    offset,
-  });
+  const data = await db
+    .select(folderPublicFields)
+    .from(folder)
+    .where(eq(folder.userId, userId))
+    .limit(limit)
+    .offset(offset);
 
   if (data.length === 0) {
     throw new ApiError(
@@ -160,12 +166,12 @@ router.post(
     const data = await db
       .insert(folder)
       .values({
+        publicId: generatePublicId(),
         userId,
         name: name.trim(),
         description: description?.trim(),
-        slug: kebabCase(name),
       })
-      .returning();
+      .returning(folderPublicFields);
 
     if (data.length === 0 || data[0] == null) {
       throw new ApiError(502, "Failed to add folder", "FOLDER_CREATE_FAILED");
@@ -207,10 +213,9 @@ router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
     .set({
       name: name.trim(),
       description: description?.trim(),
-      slug: kebabCase(name),
     })
-    .where(and(eq(folder.userId, userId), eq(folder.id, folderId)))
-    .returning();
+    .where(and(eq(folder.userId, userId), eq(folder.publicId, folderId)))
+    .returning(folderPublicFields);
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to update folder", "FOLDER_UPDATE_FAILED");
@@ -237,8 +242,8 @@ router.delete(":id", async (c) => {
 
   const data = await db
     .delete(folder)
-    .where(and(eq(folder.userId, userId), eq(folder.id, folderId)))
-    .returning();
+    .where(and(eq(folder.userId, userId), eq(folder.publicId, folderId)))
+    .returning(folderPublicFields);
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(500, "Failed to delete folder", "FOLDER_DELETE_FAILED");

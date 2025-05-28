@@ -28,6 +28,7 @@
     "imagekit": "^6.0.0",
     "link-preview-js": "^3.0.15",
     "lodash.kebabcase": "^4.1.1",
+    "nanoid": "^5.1.5",
     "normalize-url": "^8.0.1",
     "sharp": "^0.34.2",
     "tinycolor2": "^1.6.0",

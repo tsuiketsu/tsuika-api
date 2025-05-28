@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { integer, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { bigserial, integer, pgTable, text } from "drizzle-orm/pg-core";
 import {
   createInsertSchema,
   createSelectSchema,
@@ -11,7 +11,8 @@ import { bookmarkTag } from "./bookmark-tag.schema";
 import { timestamps } from "./constants";
 
 export const tag = pgTable("tags", {
-  id: serial("id").primaryKey(),
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  publicId: text("public_id").notNull().unique(),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
@@ -31,14 +32,20 @@ export const tagRelations = relations(tag, ({ one, many }) => ({
   bookmarkTag: many(bookmarkTag),
 }));
 
-export const tagSelectSchema = createSelectSchema(tag);
+export const tagSelectSchema = createSelectSchema(tag)
+  .omit({
+    userId: true,
+    publicId: true,
+  })
+  .extend({ id: z.string() });
 
 export const tagInsertSchema = createInsertSchema(tag, {
   name: z.string({ message: "Tag Name is required" }).max(30),
   color: z.string({ message: "Tag Color is required" }).min(6).max(15),
-}).omit({ userId: true });
+}).pick({ name: true, color: true });
 
 export const tagUpdateSchema = createUpdateSchema(tag, {
+  id: z.string(),
   name: z.string().max(30).optional(),
   color: z.string().min(6).max(15).optional(),
-}).omit({ userId: true, createdAt: true, updatedAt: true });
+}).pick({ name: true, color: true });

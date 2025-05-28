@@ -1,3 +1,4 @@
+import { generatePublicId } from "@/utils/nanoid";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import kebabCase from "lodash.kebabcase";
@@ -20,14 +21,14 @@ const router = createRouter();
 
 const getTagId = async (c: Context) => {
   const userId = await getUserId(c);
-  const tagId = Number.parseInt(c.req.param("id"));
+  const tagId = c.req.param("id");
 
   if (!tagId) {
     throw new ApiError(400, "Tag ID is required");
   }
 
   const isTagExists = await db.query.tag.findFirst({
-    where: and(eq(tag.userId, userId), eq(tag.id, tagId)),
+    where: and(eq(tag.userId, userId), eq(tag.publicId, tagId)),
   });
 
   if (!isTagExists) {
@@ -35,6 +36,15 @@ const getTagId = async (c: Context) => {
   }
 
   return tagId;
+};
+
+const tagPublicFields = {
+  id: tag.publicId,
+  color: tag.color,
+  name: tag.name,
+  createdAt: tag.createdAt,
+  updatedAt: tag.updatedAt,
+  useCount: tag.useCount,
 };
 
 // -----------------------------------------
@@ -66,8 +76,13 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
 
   const data: TagType[] = await db
     .insert(tag)
-    .values({ userId, name: kebabCase(name), color })
-    .returning();
+    .values({
+      publicId: generatePublicId(),
+      userId,
+      name: kebabCase(name),
+      color,
+    })
+    .returning(tagPublicFields);
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to add tag");
@@ -95,7 +110,7 @@ router.get("/", async (c) => {
 
   const data = await db.query.tag.findMany({
     where: eq(tag.userId, userId),
-    columns: { userId: false },
+    columns: { id: false, userId: false },
     orderBy: orderBy === "desc" ? desc(tag.updatedAt) : asc(tag.updatedAt),
     with: {
       bookmarkTag: {
@@ -116,7 +131,8 @@ router.get("/", async (c) => {
     {
       success: true,
       message: "Successfully fetched all tags",
-      data: data.map(({ bookmarkTag, ...tag }) => ({
+      data: data.map(({ publicId, bookmarkTag, ...tag }) => ({
+        id: publicId,
         ...tag,
         useCount: bookmarkTag.length,
       })),
@@ -148,7 +164,7 @@ router.get("/search", async (c) => {
     );
   }
 
-  let data: Omit<TagType, "userId">[] | undefined;
+  let data: unknown | undefined;
 
   const rawLimit = c.req.param("limit");
   const queryLimit = Number.parseInt(rawLimit ?? "5", 10);
@@ -161,21 +177,17 @@ router.get("/search", async (c) => {
       throw new ApiError(400, "Tag ID must be a valid number.");
     }
 
-    data = await db.query.tag.findMany({
-      where: and(eq(tag.userId, userId), eq(tag.id, parsedId)),
-      limit: safeLimit,
-      columns: {
-        userId: false,
-      },
-    });
+    data = await db
+      .select(tagPublicFields)
+      .from(tag)
+      .where(and(eq(tag.userId, userId), eq(tag.id, parsedId)))
+      .limit(safeLimit);
   } else if (name) {
-    data = await db.query.tag.findMany({
-      where: and(eq(tag.userId, userId), ilike(tag.name, `%${name}%`)),
-      limit: safeLimit,
-      columns: {
-        userId: false,
-      },
-    });
+    data = await db
+      .select(tagPublicFields)
+      .from(tag)
+      .where(and(eq(tag.userId, userId), ilike(tag.name, `%${name}%`)))
+      .limit(safeLimit);
   }
 
   if (!data) {
@@ -184,11 +196,11 @@ router.get("/search", async (c) => {
 
   console.log(data);
 
-  return c.json<SuccessResponse<Omit<TagType, "userId">[]>>(
+  return c.json<SuccessResponse<TagType[]>>(
     {
       success: true,
       message: "Successfully fetched tag",
-      data,
+      data: data as TagType[],
     },
     200,
   );
@@ -210,8 +222,8 @@ router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
       color,
       updatedAt: sql`NOW()`,
     })
-    .where(and(eq(tag.userId, userId), eq(tag.id, tagId)))
-    .returning();
+    .where(and(eq(tag.userId, userId), eq(tag.publicId, tagId)))
+    .returning(tagPublicFields);
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to update tag");
@@ -236,7 +248,7 @@ router.delete(":id", async (c) => {
 
   const result = await db
     .delete(tag)
-    .where(and(eq(tag.userId, userId), eq(tag.id, tagId)));
+    .where(and(eq(tag.userId, userId), eq(tag.publicId, tagId)));
 
   if (result.rowCount === 0) {
     throw new ApiError(502, "Failed to delete tag");

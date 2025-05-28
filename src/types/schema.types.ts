@@ -16,7 +16,11 @@ export const createBookmarkSchema = bookmarkInsertSchema
   })
   .extend({
     tags: z
-      .array(tagSelectSchema.pick({ id: true, name: true, color: true }))
+      .array(
+        tagSelectSchema
+          .pick({ name: true, color: true })
+          .extend({ id: z.number() }),
+      )
       .optional(),
   });
 

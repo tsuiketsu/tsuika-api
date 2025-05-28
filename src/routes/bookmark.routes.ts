@@ -1,16 +1,16 @@
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
+import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
-import { type SQL, and, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
-import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
-import { bookmark } from "../db/schema/bookmark.schema";
+import { bookmark, bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import { folder } from "../db/schema/folder.schema";
-import { tag, type tagSelectSchema } from "../db/schema/tag.schema";
+import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
@@ -25,8 +25,20 @@ const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
 };
 
+const whereUserId = (userId: string) => {
+  return orm.eq(bookmark.userId, userId);
+};
+
+const wherePublicId = (publicId: string) => {
+  return orm.eq(bookmark.publicId, publicId);
+};
+
+const whereBookmarkByUserAndPublicId = (userId: string, publicId: string) => {
+  return orm.and(whereUserId(userId), wherePublicId(publicId));
+};
+
 const getBookmarkIdParam = (c: Context) => {
-  const id = Number.parseInt(c.req.param("id"));
+  const id = c.req.param("id");
 
   if (!id) {
     throw new ApiError(400, "Bookmark ID is required");
@@ -37,9 +49,10 @@ const getBookmarkIdParam = (c: Context) => {
 
 const getBookmarkById = async (c: Context) => {
   const id = getBookmarkIdParam(c);
+  const userId = await getUserId(c);
 
   const prev = await db.query.bookmark.findFirst({
-    where: and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, id)),
+    where: whereBookmarkByUserAndPublicId(userId, id),
 
     columns: { id: true, url: true },
   });
@@ -61,7 +74,7 @@ const getBookmarkId = async (c: Context) => {
   c.set("bookmarkId", id);
 
   const isBookmarkExists = await db.query.bookmark.findFirst({
-    where: and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, id)),
+    where: whereBookmarkByUserAndPublicId(await getUserId(c), id),
     columns: { id: true },
   });
 
@@ -87,11 +100,9 @@ const setBookmarkFlag = async (
     .update(bookmark)
     .set({
       [field]: state,
-      updatedAt: sql`NOW()`,
+      updatedAt: orm.sql`NOW()`,
     })
-    .where(
-      and(eq(bookmark.userId, c.get("user").id), eq(bookmark.id, bookmarkId)),
-    );
+    .where(whereBookmarkByUserAndPublicId(await getUserId(c), bookmarkId));
 
   if (result.rowCount === 0) {
     throw new ApiError(502, `Failed to change ${field} state`);
@@ -103,7 +114,31 @@ const setBookmarkFlag = async (
   );
 };
 
-const bookmarkWithTags = {
+const getFolder = async (folderId: string | undefined, userId: string) => {
+  let data: { id: number } | undefined;
+
+  if (folderId) {
+    data = await db.query.folder.findFirst({
+      where: orm.and(whereUserId(userId), orm.eq(folder.publicId, folderId)),
+      columns: { id: true },
+    });
+
+    if (!data?.id) {
+      throw new ApiError(
+        500,
+        `Failed to get folder by id ${folderId}`,
+        "FOLDER_NOT_FOUND",
+      );
+    }
+  }
+
+  return data;
+};
+
+const bookmarkJoins = {
+  bookmarkFolder: {
+    columns: { publicId: true },
+  },
   bookmarkTag: {
     columns: { appliedAt: true },
     with: {
@@ -122,21 +157,13 @@ const bookmarkWithTags = {
 const insertTags = async (
   userId: string,
   bookmarkId: number | undefined,
-  tags:
-    | z.infer<
-        ReturnType<
-          typeof tagSelectSchema.pick<{ id: true; name: true; color: true }>
-        >
-      >[]
-    | undefined,
+  tags: { id: number; name: string; color: string }[] | undefined,
 ): Promise<boolean> => {
   let tagsInserted = false;
   if (bookmarkId && tags && tags.length > 0) {
     const response = await db
       .insert(bookmarkTag)
-      .values(
-        tags.map(({ id }) => ({ userId, tagId: id, bookmarkId: bookmarkId })),
-      )
+      .values(tags.map(({ id }) => ({ userId, tagId: id, bookmarkId })))
       .returning({ bookmarkId: bookmarkTag.bookmarkId });
 
     if (response.length > 0 && response[0] != null) {
@@ -144,6 +171,22 @@ const insertTags = async (
     }
   }
   return tagsInserted;
+};
+
+const bookmarkPublicFields = {
+  id: bookmark.publicId,
+  title: bookmark.title,
+  description: bookmark.description,
+  url: bookmark.url,
+  faviconUrl: bookmark.faviconUrl,
+  thumbnail: bookmark.thumbnail,
+  thumbnailWidth: bookmark.thumbnailWidth,
+  thumbnailHeight: bookmark.thumbnailHeight,
+  isPinned: bookmark.isPinned,
+  isFavourite: bookmark.isFavourite,
+  isArchived: bookmark.isArchived,
+  createdAt: bookmark.createdAt,
+  updatedAt: bookmark.updatedAt,
 };
 
 // -----------------------------------------
@@ -157,6 +200,8 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   }
 
   const userId = await getUserId(c);
+
+  const folderData = await getFolder(folderId, userId);
 
   // NOTE: Whole thing is not very robust, db.transaction is better choice
   // but that doesn't work with neon-http, also db.batch which is not
@@ -177,20 +222,22 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
     imageMeta = await getImageMedatata(image);
   }
 
-  const data: BookmarkType[] = await db
-    .insert(bookmark)
-    .values({
-      folderId,
-      userId: userId,
-      title: siteMeta.data?.title || "Untitled",
-      description: siteMeta.data?.description || "",
-      url,
-      thumbnail: siteMeta.data?.images?.[0] ?? null,
-      faviconUrl: siteMeta.data?.favicons?.[0] ?? getFavIcon(url),
-      thumbnailHeight: imageMeta?.height,
-      thumbnailWidth: imageMeta?.width,
-    })
-    .returning();
+  const data: (Omit<BookmarkType, "id" | "folderId"> & { id: number })[] =
+    await db
+      .insert(bookmark)
+      .values({
+        publicId: generatePublicId(),
+        folderId: folderData?.id,
+        userId: userId,
+        title: title || siteMeta.data?.title || "Untitled",
+        description: siteMeta.data?.description || "",
+        url,
+        thumbnail: siteMeta.data?.images?.[0] ?? null,
+        faviconUrl: siteMeta.data?.favicons?.[0] ?? getFavIcon(url),
+        thumbnailHeight: imageMeta?.height,
+        thumbnailWidth: imageMeta?.width,
+      })
+      .returning();
 
   if (data.length === 0 || typeof data[0] === "undefined") {
     throw new ApiError(502, "Failed to add bookmark");
@@ -199,11 +246,17 @@ router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
   const bookmarkId = data[0].id;
   const tagsInserted = await insertTags(userId, bookmarkId, tags);
 
+  const { publicId, ...rest } = data[0];
   return c.json<SuccessResponse<BookmarkType>>(
     {
       success: true,
       message: "Bookmark added successfully 🔖",
-      data: Object.assign({}, data[0], tagsInserted ? { tags } : {}),
+      data: bookmarkSelectSchema.parse({
+        ...rest,
+        id: publicId,
+        folderId,
+        ...(tagsInserted ? { tags } : {}),
+      }),
     },
     200,
   );
@@ -219,8 +272,9 @@ router.get("/", async (c) => {
   const orderBy = getOrderDirection(c.req.query());
 
   const data = await db.query.bookmark.findMany({
-    where: eq(bookmark.userId, userId),
-    with: bookmarkWithTags,
+    where: orm.eq(bookmark.userId, userId),
+    with: bookmarkJoins,
+    columns: { userId: false },
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
         return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
@@ -238,8 +292,10 @@ router.get("/", async (c) => {
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
     success: true,
     message: "Successfully fetched all bookmarks",
-    data: data.map(({ bookmarkTag, ...rest }) => ({
+    data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
       ...rest,
+      id: publicId,
+      folderId: bookmarkFolder?.publicId ?? null,
       tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
     })),
     pagination: {
@@ -263,7 +319,7 @@ router.get("/tag/:tagSlug", async (c) => {
   }
 
   const tagData = await db.query.tag.findFirst({
-    where: and(eq(tag.userId, userId), eq(tag.name, tagName)),
+    where: orm.and(orm.eq(tag.userId, userId), orm.eq(tag.name, tagName)),
     columns: {
       id: true,
     },
@@ -280,11 +336,15 @@ router.get("/tag/:tagSlug", async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
 
   const data = await db.query.bookmarkTag.findMany({
-    where: and(
-      eq(bookmarkTag.userId, userId),
-      eq(bookmarkTag.tagId, tagData.id),
+    where: orm.and(
+      orm.eq(bookmarkTag.userId, userId),
+      orm.eq(bookmarkTag.tagId, tagData.id),
     ),
-    with: { bookmark: true },
+    with: {
+      bookmark: {
+        with: { bookmarkFolder: { columns: { publicId: true } } },
+      },
+    },
     limit,
     offset,
   });
@@ -299,7 +359,11 @@ router.get("/tag/:tagSlug", async (c) => {
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
     success: true,
-    data: data.map(({ bookmark }) => bookmark),
+    data: data.map(({ bookmark: { publicId, bookmarkFolder, ...rest } }) => ({
+      ...rest,
+      id: publicId,
+      folderId: bookmarkFolder?.publicId ?? null,
+    })),
     message: "Successfully fetched bookmarks",
     pagination: {
       page,
@@ -311,33 +375,33 @@ router.get("/tag/:tagSlug", async (c) => {
 });
 
 // -----------------------------------------
-// GET BOOKMARKS BY FOLDER SLUG
+// GET BOOKMARKS BY FOLDER ID
 // -----------------------------------------
-router.get("/folder/:folderSlug", async (c) => {
+router.get("/folder/:id", async (c) => {
   const userId = await getUserId(c);
-  const folderName = c.req.param("folderSlug");
+  const folderId = c.req.param("id");
 
-  if (!folderName || folderName.trim() === "") {
+  if (!folderId || folderId.trim() === "") {
     throw new ApiError(400, "Invalid folder name", "INVALID_FOLDER_NAME");
   }
 
-  let condition: SQL<unknown> | undefined;
+  let condition: orm.SQL<unknown> | undefined;
 
-  switch (folderName.toLowerCase().trim()) {
+  switch (folderId.toLowerCase().trim()) {
     case "archived":
-      condition = eq(bookmark.isArchived, true);
+      condition = orm.eq(bookmark.isArchived, true);
       break;
     case "favorites":
-      condition = eq(bookmark.isFavourite, true);
+      condition = orm.eq(bookmark.isFavourite, true);
       break;
     case "unsorted":
-      condition = isNull(bookmark.folderId);
+      condition = orm.isNull(bookmark.folderId);
       break;
     default: {
       const folderObj = await db.query.folder.findFirst({
-        where: and(
-          eq(folder.userId, userId),
-          eq(folder.slug, folderName.trim()),
+        where: orm.and(
+          orm.eq(folder.userId, userId),
+          orm.eq(folder.publicId, folderId.trim()),
         ),
         columns: {
           id: true,
@@ -347,12 +411,12 @@ router.get("/folder/:folderSlug", async (c) => {
       if (!folderObj?.id) {
         throw new ApiError(
           404,
-          `Folder with slug ${folderName} not found`,
+          `Folder with slug ${folderId} not found`,
           "FOLDER_NOT_FOUND",
         );
       }
 
-      condition = eq(bookmark.folderId, folderObj.id);
+      condition = orm.eq(bookmark.folderId, folderObj.id);
     }
   }
 
@@ -361,20 +425,20 @@ router.get("/folder/:folderSlug", async (c) => {
   // Add optional bookmark query by title or url
   const bookmarkQuery = c.req.query("query");
 
-  let queryCondition: SQL<unknown> | undefined = undefined;
+  let queryCondition: orm.SQL<unknown> | undefined = undefined;
 
   if (bookmarkQuery && bookmarkQuery.trim() !== "") {
-    queryCondition = or(
-      ilike(bookmark.title, `%${bookmarkQuery}%`),
-      ilike(bookmark.url, `%${bookmarkQuery}%`),
+    queryCondition = orm.or(
+      orm.ilike(bookmark.title, `%${bookmarkQuery}%`),
+      orm.ilike(bookmark.url, `%${bookmarkQuery}%`),
     );
   }
 
   const orderBy = getOrderDirection(c.req.query());
 
   const data = await db.query.bookmark.findMany({
-    where: and(eq(bookmark.userId, userId), condition, queryCondition),
-    with: bookmarkWithTags,
+    where: orm.and(orm.eq(bookmark.userId, userId), condition, queryCondition),
+    with: bookmarkJoins,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
         return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
@@ -388,7 +452,7 @@ router.get("/folder/:folderSlug", async (c) => {
   if (data.length === 0) {
     throw new ApiError(
       400,
-      `No bookmarks exists in folder ${folderName}`,
+      `No bookmarks exists in folder ${folderId}`,
       "BOOKMARK_NOT_FOUND",
     );
   }
@@ -396,8 +460,10 @@ router.get("/folder/:folderSlug", async (c) => {
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
     success: true,
     message: "Successfully fetched all bookmarks",
-    data: data.map(({ bookmarkTag, ...rest }) => ({
+    data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
       ...rest,
+      id: publicId,
+      folderId: bookmarkFolder?.publicId ?? null,
       tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
     })),
     pagination: {
@@ -419,15 +485,15 @@ router.get(":id", async (c) => {
     throw new ApiError(401, "Unauthorized access detected");
   }
 
-  const bookmarkId = Number.parseInt(c.req.param("id"));
+  const bookmarkId = await getBookmarkId(c);
 
   if (!bookmarkId) {
     throw new ApiError(400, "Bookmark ID is required");
   }
 
   const data = await db.query.bookmark.findFirst({
-    where: and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)),
-    with: bookmarkWithTags,
+    where: whereBookmarkByUserAndPublicId(userId, bookmarkId),
+    with: bookmarkJoins,
   });
 
   if (!data) {
@@ -448,12 +514,22 @@ router.get(":id", async (c) => {
     tags,
   };
 
-  const { bookmarkTag, ...rest } = updatedData;
+  const {
+    userId: omitThis,
+    bookmarkFolder,
+    bookmarkTag,
+    publicId,
+    ...rest
+  } = updatedData;
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
       success: true,
-      data: rest,
+      data: {
+        ...rest,
+        id: publicId,
+        folderId: bookmarkFolder?.publicId ?? null,
+      },
       message: "Successfully fetched bookmark",
     },
     200,
@@ -476,6 +552,7 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
   const { folderId, title, url, description, tags } = c.req.valid("json");
 
   const user = c.get("user");
+  const folderData = await getFolder(folderId, userId);
 
   if (!user) {
     throw new ApiError(401, "Failed to add bookmark, user not found");
@@ -505,21 +582,23 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
 
   const newThumbnail = siteMeta?.data?.images?.[0];
 
-  const data: BookmarkType[] = await db
+  const data: Omit<BookmarkType, "folderId">[] = await db
     .update(bookmark)
     .set({
-      folderId,
+      folderId: folderData?.id,
       title: title ?? (siteMeta?.data?.title || "Untitled"),
       description: description ?? (siteMeta?.data?.description || ""),
       url,
       faviconUrl: siteMeta?.data?.favicons?.[0] ?? getFavIcon(url),
-      updatedAt: sql`NOW()`,
+      updatedAt: orm.sql`NOW()`,
       thumbnailHeight: imageMeta?.height,
       thumbnailWidth: imageMeta?.width,
       ...(newThumbnail ? { thumbnail: newThumbnail } : {}),
     })
-    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, prev.id)))
-    .returning();
+    .where(
+      orm.and(orm.eq(bookmark.userId, userId), orm.eq(bookmark.id, prev.id)),
+    )
+    .returning(bookmarkPublicFields);
 
   if (data.length === 0 || data[0] == null) {
     throw new ApiError(502, "Failed to updated bookmark");
@@ -531,7 +610,11 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
     {
       success: true,
       message: "Bookmark updated successfully 🔖",
-      data: Object.assign({}, data[0], tagsInserted ? { tags } : {}),
+      data: {
+        ...data[0],
+        folderId: folderId ?? null,
+        ...(tagsInserted ? { tags } : {}),
+      },
     },
     200,
   );
@@ -541,21 +624,14 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
 // DELETE BOOKMARK
 // -----------------------------------------
 router.delete(":id", async (c) => {
-  const userId = c.get("user")?.id;
-
-  if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
-  }
-
+  const userId = await getUserId(c);
   const bookmarkId = await getBookmarkId(c);
 
   // Remove bookmark from database
-  const data: { deleteId: number }[] = await db
+  const data: { deletedBookmarkId: string }[] = await db
     .delete(bookmark)
-    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
-    .returning({
-      deleteId: bookmark.id,
-    });
+    .where(whereBookmarkByUserAndPublicId(userId, bookmarkId))
+    .returning({ deletedBookmarkId: bookmark.publicId });
 
   if (data.length === 0) {
     throw new ApiError(502, "Failed to delete bookmark");
@@ -574,12 +650,7 @@ router.delete(":id", async (c) => {
 // UPDATE BOOKMARK THUMBNAIL
 // -----------------------------------------
 router.patch(":id/thumbnail", async (c) => {
-  const userId = c.get("user")?.id;
-
-  if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
-  }
-
+  const userId = await getUserId(c);
   const bookmarkId = await getBookmarkId(c);
 
   // Verify if thumbnail path provided
@@ -600,8 +671,7 @@ router.patch(":id/thumbnail", async (c) => {
 
   // Get previous thumbnail url before updating
   const prevThumbnail = await db.query.bookmark.findFirst({
-    where: and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)),
-
+    where: whereBookmarkByUserAndPublicId(userId, bookmarkId),
     columns: {
       thumbnail: true,
     },
@@ -612,9 +682,9 @@ router.patch(":id/thumbnail", async (c) => {
     .update(bookmark)
     .set({
       thumbnail: thumbnail.fileId,
-      updatedAt: sql`NOW()`,
+      updatedAt: orm.sql`NOW()`,
     })
-    .where(and(eq(bookmark.userId, userId), eq(bookmark.id, bookmarkId)))
+    .where(whereBookmarkByUserAndPublicId(userId, bookmarkId))
     .returning({
       thumbnail: bookmark.thumbnail,
     });
