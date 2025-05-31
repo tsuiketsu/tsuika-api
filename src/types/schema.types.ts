@@ -1,29 +1,11 @@
+import type { profileSelectSchema } from "@/db/schema/profile.schema";
 import { z } from "zod";
 import type { bookmarkTagSelectSchema } from "../db/schema/bookmark-tag.schema";
-import {
-  bookmarkInsertSchema,
-  type bookmarkSelectSchema,
-} from "../db/schema/bookmark.schema";
+import type { bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import type { folderSelectSchema } from "../db/schema/folder.schema";
-import { tagSelectSchema } from "../db/schema/tag.schema";
+import type { tagSelectSchema } from "../db/schema/tag.schema";
 
-export const createBookmarkSchema = bookmarkInsertSchema
-  .pick({
-    folderId: true,
-    title: true,
-    description: true,
-    url: true,
-  })
-  .extend({
-    tags: z
-      .array(
-        tagSelectSchema
-          .pick({ name: true, color: true })
-          .extend({ id: z.number() }),
-      )
-      .optional(),
-  });
-
+export type ProfileType = z.infer<typeof profileSelectSchema>;
 export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
 export type TagType = z.infer<typeof tagSelectSchema>;
 

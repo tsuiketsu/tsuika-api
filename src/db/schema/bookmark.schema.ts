@@ -16,6 +16,7 @@ import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
 import { timestamps } from "./constants";
 import { folder } from "./folder.schema";
+import { tagSelectSchema } from "./tag.schema";
 
 export const bookmark = pgTable("bookmarks", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -57,7 +58,7 @@ export const bookmarkRelations = relations(bookmark, ({ one, many }) => ({
 export const bookmarkSelectSchema = createSelectSchema(bookmark, {
   id: z.string(),
   publicId: z.string().optional(),
-  folderId: z.string().nullable(),
+  folderId: z.string().optional(),
 }).omit({ userId: true });
 
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
@@ -67,4 +68,14 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   url: z.string().url("Must be a valid URL"),
   faviconUrl: z.string().optional(),
   thumbnail: z.string().optional(),
-});
+})
+  .omit({ userId: true, publicId: true })
+  .extend({
+    tags: z
+      .array(
+        tagSelectSchema
+          .pick({ name: true, color: true })
+          .extend({ id: z.number() }),
+      )
+      .optional(),
+  });

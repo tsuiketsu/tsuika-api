@@ -8,12 +8,16 @@ import type { Context } from "hono";
 import type { Metadata } from "sharp";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
-import { bookmark, bookmarkSelectSchema } from "../db/schema/bookmark.schema";
+import {
+  bookmark,
+  bookmarkInsertSchema,
+  bookmarkSelectSchema,
+} from "../db/schema/bookmark.schema";
 import { folder } from "../db/schema/folder.schema";
 import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
-import { type BookmarkType, createBookmarkSchema } from "../types/schema.types";
+import type { BookmarkType } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId } from "../utils";
 import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
@@ -192,7 +196,7 @@ const bookmarkPublicFields = {
 // -----------------------------------------
 // ADD NEW BOOKMARK
 // -----------------------------------------
-router.post("/", zValidator("json", createBookmarkSchema), async (c) => {
+router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   const { folderId, title, url, tags } = c.req.valid("json");
 
   if (!url) {
@@ -295,7 +299,7 @@ router.get("/", async (c) => {
     data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
       ...rest,
       id: publicId,
-      folderId: bookmarkFolder?.publicId ?? null,
+      folderId: bookmarkFolder?.publicId,
       tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
     })),
     pagination: {
@@ -362,7 +366,7 @@ router.get("/tag/:tagSlug", async (c) => {
     data: data.map(({ bookmark: { publicId, bookmarkFolder, ...rest } }) => ({
       ...rest,
       id: publicId,
-      folderId: bookmarkFolder?.publicId ?? null,
+      folderId: bookmarkFolder?.publicId,
     })),
     message: "Successfully fetched bookmarks",
     pagination: {
@@ -463,7 +467,7 @@ router.get("/folder/:id", async (c) => {
     data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
       ...rest,
       id: publicId,
-      folderId: bookmarkFolder?.publicId ?? null,
+      folderId: bookmarkFolder?.publicId,
       tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
     })),
     pagination: {
@@ -528,7 +532,7 @@ router.get(":id", async (c) => {
       data: {
         ...rest,
         id: publicId,
-        folderId: bookmarkFolder?.publicId ?? null,
+        folderId: bookmarkFolder?.publicId,
       },
       message: "Successfully fetched bookmark",
     },
@@ -539,7 +543,7 @@ router.get(":id", async (c) => {
 // -----------------------------------------
 // UPDATE BOOKMARK
 // -----------------------------------------
-router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
+router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   const userId = c.get("user")?.id;
 
   if (!userId) {
@@ -612,7 +616,7 @@ router.put(":id", zValidator("json", createBookmarkSchema), async (c) => {
       message: "Bookmark updated successfully 🔖",
       data: {
         ...data[0],
-        folderId: folderId ?? null,
+        folderId: folderId,
         ...(tagsInserted ? { tags } : {}),
       },
     },
