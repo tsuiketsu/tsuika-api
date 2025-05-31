@@ -1,61 +1,57 @@
+import type { ProfileType } from "@/types/schema.types";
+import { getUserId } from "@/utils";
+import { zValidator } from "@/utils/validator-wrapper";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { profile } from "../db/schema/profile.schema";
+import {
+  profile,
+  profileInsertSchema,
+  profileSelectSchema,
+} from "../db/schema/profile.schema";
 import { createRouter } from "../lib/create-app";
-import type { ImageKitReponse } from "../types";
+import type { SuccessResponse } from "../types";
 import { ApiError } from "../utils/api-error";
-import { uploadOnImageKit } from "../utils/imagekit";
 
 const router = createRouter();
 
+const whereUserId = (userId: string) => {
+  return eq(profile.userId, userId);
+};
+
 // -----------------------------------------
-// ADD NEW USER
+// Update Preferences
 // -----------------------------------------
-router.post("/", async (c) => {
-  const body = await c.req.parseBody();
+router.post("/", zValidator("json", profileInsertSchema), async (c) => {
+  const { preferencesJson } = c.req.valid("json");
 
-  const localAvatarUrl = body["avatar"];
-  const localCoverImageUrl = body["coverImage"];
+  const userId = await getUserId(c);
 
-  let avatar: ImageKitReponse | undefined;
-
-  if (localAvatarUrl && localAvatarUrl instanceof File) {
-    avatar = await uploadOnImageKit(localAvatarUrl as File);
-
-    if (!avatar?.url) {
-      throw new ApiError(avatar?.status || 502, avatar?.message);
-    }
-  }
-
-  let coverImage: ImageKitReponse | undefined;
-
-  if (localCoverImageUrl && localCoverImageUrl instanceof File) {
-    coverImage = await uploadOnImageKit(localCoverImageUrl);
-
-    if (coverImage.url) {
-      throw new ApiError(coverImage.status, coverImage.message);
-    }
-  }
-
-  const user = await db
+  const data = await db
     .insert(profile)
     .values({
-      avatar: avatar?.url ?? null,
-      coverImage: coverImage?.url ?? null,
+      userId,
+      preferencesJson,
     })
-    .returning()
-    .catch((err) => {
-      throw new ApiError(500, err);
-    });
+    .onConflictDoUpdate({
+      target: profile.userId,
+      where: whereUserId(userId),
+      set: { preferencesJson, updatedAt: sql`now()` },
+    })
+    .returning();
 
-  if (!user || user.length === 0) {
-    throw new ApiError(500, "Failed to add user");
+  if (!data || data[0] == null) {
+    throw new ApiError(
+      502,
+      "Failed to update user preferences",
+      "PROFILE_UPDATE_FAILED",
+    );
   }
 
-  return c.json(
+  return c.json<SuccessResponse<ProfileType>>(
     {
       success: true,
-      message: "Successfully added user ✨",
-      data: user[0],
+      data: profileSelectSchema.parse(data[0]),
+      message: "Successfully updated preferences",
     },
     200,
   );
