@@ -26,27 +26,13 @@ app.use("*", requireAuth);
 // Routes imports
 import * as allRoutes from "./routes";
 
-const { auth, ...routes } = allRoutes;
+const { auth, authData, ...routes } = allRoutes;
 
 app.route("/api", auth);
+app.route("/api", authData);
 
 for (const [key, value] of Object.entries(routes)) {
   app.basePath("/api/v1").route(`/${kebabCase(key)}s`, value);
 }
-
-// -----------------------------------------
-// GET USER SESSION
-// -----------------------------------------
-app.get("/api/session", async (c) => {
-  const session = c.get("session");
-  const user = c.get("user");
-
-  if (!user) return c.body(null, 401);
-
-  return c.json({
-    session,
-    user,
-  });
-});
 
 export { app };

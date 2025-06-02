@@ -290,7 +290,7 @@ router.get("/", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(400, "No tags found");
+    throw new ApiError(400, "No bookmarks found");
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
@@ -502,7 +502,7 @@ router.get(":id", async (c) => {
 
   if (!data) {
     throw new ApiError(
-      400,
+      404,
       `Bookmark with ${bookmarkId} not found`,
       "BOOKMARK_NOT_FOUND",
     );
