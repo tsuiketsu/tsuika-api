@@ -2,9 +2,15 @@ import { sendOTP } from "@/helpers/send-email";
 import { ApiError } from "@/utils/api-error";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP } from "better-auth/plugins";
+import { emailOTP, twoFactor } from "better-auth/plugins";
 import { db } from "../db";
-import { account, session, user, verification } from "../db/schema/auth.schema";
+import {
+  account,
+  session,
+  twoFactor as twoFactorSchema,
+  user,
+  verification,
+} from "../db/schema/auth.schema";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -14,6 +20,7 @@ export const auth = betterAuth({
       sessions: session,
       accounts: account,
       verifications: verification,
+      twoFactors: twoFactorSchema,
     },
     usePlural: true,
   }),
@@ -46,6 +53,7 @@ export const auth = betterAuth({
   },
 
   plugins: [
+    twoFactor(),
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
         const verification = await db.query.verification.findFirst({
