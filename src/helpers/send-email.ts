@@ -1,25 +1,30 @@
 import type { ReactNode as Rn } from "hono/jsx";
-import { Resend } from "resend";
-import { OTPTemplate } from "tsuika-react-email-templates";
+import { type CreateEmailResponse, type ErrorResponse, Resend } from "resend";
+import { MagicLinkTemplate, OTPTemplate } from "tsuika-email-templates";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendMail(email: string, subject: string, react: Rn) {
+export async function sendMail(
+  email: string,
+  subject: string,
+  react: Rn,
+): Promise<CreateEmailResponse> {
   try {
-    const { data, error } = await resend.emails.send({
+    const response = await resend.emails.send({
       from: "Tsuika <onbording@tsuika.space>",
       to: email,
       subject,
       react,
     });
 
-    if (error || !data?.id) {
-      console.error("Failed to send email", error);
+    if (response.error || !response.data?.id) {
+      console.error("Failed to send email", response.error);
     }
 
-    console.log("Successfully sent email!");
+    return response;
   } catch (error) {
     console.error("Faled to send email", error);
+    return { data: null, error: error as ErrorResponse };
   }
 }
 
@@ -46,5 +51,22 @@ export async function sendOTP(props: SendOtpProps) {
       { label: "E-Mail", href: "mailto:imrayy.wklem@aleeas.com" },
     ],
   });
+  return await sendMail(email, subject, react);
+}
+
+interface SendEmailVerificationLinkProps {
+  email: string;
+  url: string;
+  preview: string;
+  subject?: string;
+}
+
+export async function sendEmailVerificationLink(
+  props: SendEmailVerificationLinkProps,
+) {
+  const { email, url, preview, subject = "Verify your email" } = props;
+
+  const react = MagicLinkTemplate({ preview, url });
+
   return await sendMail(email, subject, react);
 }

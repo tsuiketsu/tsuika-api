@@ -1,4 +1,4 @@
-import { sendOTP } from "@/helpers/send-email";
+import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
 import { ApiError } from "@/utils/api-error";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -31,9 +31,22 @@ export const auth = betterAuth({
       maxAge: 5 * 60,
     },
   },
+  user: {
+    changeEmail: {
+      enabled: true,
+      sendChangeEmailVerification: async ({ user, url }) => {
+        await sendEmailVerificationLink({
+          preview: "Request to Change Your Email Address",
+          subject: "Email Change Request",
+          email: user.email,
+          url,
+        });
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    // requireEmailVerification: true,
     password: {
       hash: async (password) => {
         return await Bun.password.hash(password, {
@@ -51,10 +64,10 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: 3600,
   },
-
   plugins: [
     twoFactor(),
     emailOTP({
+      allowedAttempts: 5,
       async sendVerificationOTP({ email, otp, type }) {
         const verification = await db.query.verification.findFirst({
           where: ({ identifier }, { eq }) =>

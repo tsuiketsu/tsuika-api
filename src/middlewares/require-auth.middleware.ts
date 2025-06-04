@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { ApiError } from "../utils/api-error";
 
-const ignoreList = ["/api/auth", "/api/get-verification-email"];
+const ignoreList = ["/api/auth", "/api/verification-email"];
 
 const requireAuth = async (c: Context, next: Next) => {
   const path = c.req.path;
