@@ -59,7 +59,17 @@ export const bookmarkSelectSchema = createSelectSchema(bookmark, {
   id: z.string(),
   publicId: z.string().optional(),
   folderId: z.string().optional(),
-}).omit({ userId: true });
+})
+  .omit({ userId: true })
+  .extend({
+    tags: z
+      .array(
+        tagSelectSchema.pick({ name: true, color: true }).extend({
+          id: z.string(),
+        }),
+      )
+      .optional(),
+  });
 
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   folderId: z.string().optional(),
@@ -75,7 +85,7 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
       .array(
         tagSelectSchema
           .pick({ name: true, color: true })
-          .extend({ id: z.number() }),
+          .extend({ id: z.string() }),
       )
       .optional(),
   });

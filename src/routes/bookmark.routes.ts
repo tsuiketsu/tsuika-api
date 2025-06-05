@@ -6,6 +6,7 @@ import { getCleanUrl } from "@/utils/parse-url";
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
+import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import {
@@ -14,7 +15,7 @@ import {
   bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
 import { folder } from "../db/schema/folder.schema";
-import { tag } from "../db/schema/tag.schema";
+import { tag, tagUpdateSchema } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { BookmarkType } from "../types/schema.types";
@@ -148,6 +149,7 @@ const bookmarkJoins = {
     with: {
       tag: {
         columns: {
+          publicId: true,
           name: true,
           color: true,
         },
@@ -158,16 +160,38 @@ const bookmarkJoins = {
   Parameters<(typeof db)["query"]["bookmark"]["findFirst" | "findMany"]>[0]
 >["with"];
 
+const getTagIds = async (
+  userId: string,
+  tagPublicIds: string[] | undefined,
+): Promise<number[] | undefined> => {
+  if (!tagPublicIds) return undefined;
+
+  const tags = await db.query.tag.findMany({
+    where: orm.and(
+      whereUserId(userId),
+      orm.inArray(tag.publicId, tagPublicIds),
+    ),
+    columns: { id: true },
+  });
+
+  if (tags.length === 0) {
+    throw new ApiError(404, "No tags found", "TAG_NOT_FOUND");
+  }
+
+  return tags.map(({ id }) => id);
+};
+
 const insertTags = async (
   userId: string,
   bookmarkId: number | undefined,
-  tags: { id: number; name: string; color: string }[] | undefined,
+  tags: number[] | undefined,
 ): Promise<boolean> => {
   let tagsInserted = false;
   if (bookmarkId && tags && tags.length > 0) {
     const response = await db
       .insert(bookmarkTag)
-      .values(tags.map(({ id }) => ({ userId, tagId: id, bookmarkId })))
+      .values(tags.map((tagId) => ({ userId, tagId, bookmarkId })))
+      .onConflictDoNothing()
       .returning({ bookmarkId: bookmarkTag.bookmarkId });
 
     if (response.length > 0 && response[0] != null) {
@@ -198,6 +222,7 @@ const bookmarkPublicFields = {
 // -----------------------------------------
 router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   const { folderId, title, url, tags } = c.req.valid("json");
+  console.log("Its not reaching here");
 
   if (!url) {
     throw new ApiError(400, "Url is required", "INVALID_PARAMETERS");
@@ -248,7 +273,13 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   }
 
   const bookmarkId = data[0].id;
-  const tagsInserted = await insertTags(userId, bookmarkId, tags);
+
+  const tagIds = await getTagIds(
+    userId,
+    tags?.map((tag) => tag.id),
+  );
+
+  const tagsInserted = await insertTags(userId, bookmarkId, tagIds);
 
   const { publicId, ...rest } = data[0];
   return c.json<SuccessResponse<BookmarkType>>(
@@ -300,7 +331,11 @@ router.get("/", async (c) => {
       ...rest,
       id: publicId,
       folderId: bookmarkFolder?.publicId,
-      tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
+      tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+        ...tag,
+        id: tag.publicId,
+        appliedAt,
+      })),
     })),
     pagination: {
       page,
@@ -468,7 +503,11 @@ router.get("/folder/:id", async (c) => {
       ...rest,
       id: publicId,
       folderId: bookmarkFolder?.publicId,
-      tags: bookmarkTag.map(({ tag, appliedAt }) => ({ ...tag, appliedAt })),
+      tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+        ...tag,
+        id: tag.publicId,
+        appliedAt,
+      })),
     })),
     pagination: {
       page,
@@ -533,6 +572,7 @@ router.get(":id", async (c) => {
         ...rest,
         id: publicId,
         folderId: bookmarkFolder?.publicId,
+        tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
       },
       message: "Successfully fetched bookmark",
     },
@@ -608,7 +648,11 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     throw new ApiError(502, "Failed to updated bookmark");
   }
 
-  const tagsInserted = await insertTags(userId, prev.id, tags);
+  const tagIds = await getTagIds(
+    userId,
+    tags?.map((tag) => tag.id),
+  );
+  const tagsInserted = await insertTags(userId, prev.id, tagIds);
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
