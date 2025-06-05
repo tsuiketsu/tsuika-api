@@ -347,18 +347,18 @@ router.get("/", async (c) => {
 });
 
 // -----------------------------------------
-// GET BOOKMARKS BY TAG
+// GET BOOKMARKS BY TAG PUBLIC ID
 // -----------------------------------------
-router.get("/tag/:tagSlug", async (c) => {
+router.get("/tag/:publicId", async (c) => {
   const userId = await getUserId(c);
-  const tagName = c.req.param("tagSlug");
+  const publicId = c.req.param("publicId");
 
-  if (!tagName || tagName.trim() === "") {
-    throw new ApiError(400, "Invalid tag name", "INVALID_PARAMETERS");
+  if (!publicId || publicId.trim() === "") {
+    throw new ApiError(400, "Invalid tag id", "INVALID_PARAMETERS");
   }
 
   const tagData = await db.query.tag.findFirst({
-    where: orm.and(orm.eq(tag.userId, userId), orm.eq(tag.name, tagName)),
+    where: orm.and(orm.eq(tag.userId, userId), orm.eq(tag.publicId, publicId)),
     columns: {
       id: true,
     },
@@ -367,7 +367,7 @@ router.get("/tag/:tagSlug", async (c) => {
   if (!tagData) {
     throw new ApiError(
       400,
-      `Tag with tagname ${tagName} not found`,
+      `Tag with tagname ${publicId} not found`,
       "INVALID_TAG_NAME",
     );
   }
@@ -391,7 +391,7 @@ router.get("/tag/:tagSlug", async (c) => {
   if (!data || data.length === 0) {
     throw new ApiError(
       400,
-      `No bookmarks associated with tag ${tagName}`,
+      `No bookmarks associated with tag ${publicId}`,
       "BOOKMARK_NOT_FOUND",
     );
   }
