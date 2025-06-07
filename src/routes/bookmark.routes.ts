@@ -6,6 +6,7 @@ import { getCleanUrl } from "@/utils/parse-url";
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
+import { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import {
@@ -87,6 +88,24 @@ const getBookmarkId = async (c: Context) => {
   }
 
   return id;
+};
+
+// Get folder row's id (primary key)
+const getFolderId = async (userId: string, publicId: string) => {
+  const data = await db.query.folder.findFirst({
+    where: orm.and(whereUserId(userId), orm.eq(folder.publicId, publicId)),
+    columns: { id: true },
+  });
+
+  if (!data) {
+    throw new ApiError(
+      404,
+      `Folder with id ${publicId} no found`,
+      "FOLDER_NOT_FOUND",
+    );
+  }
+
+  return data.id;
 };
 
 const setBookmarkFlag = async (
@@ -779,6 +798,55 @@ router.patch(":id/thumbnail", async (c) => {
     200,
   );
 });
+
+// -----------------------------------------
+// ADD BOOKMARKS TO A FOLDER IN BULK
+// -----------------------------------------
+const bulkAssignSchema = z.object({
+  bookmarkIds: z.array(z.string()),
+});
+
+router.patch(
+  "/folder/:folderId/bulk-assign-folder",
+  zValidator("json", bulkAssignSchema),
+  async (c) => {
+    const folderId = c.req.param("folderId");
+
+    if (!folderId) {
+      throw new ApiError(400, "folderId  required", "INVALID_PARAMETERS");
+    }
+
+    const { bookmarkIds } = c.req.valid("json");
+
+    if (bookmarkIds.length === 0) {
+      throw new ApiError(400, "bookmarkIds are empty", "INVALID_PARAMETERS");
+    }
+
+    const userId = await getUserId(c);
+    const folderNumericId = await getFolderId(userId, folderId);
+
+    const data = await db
+      .update(bookmark)
+      .set({
+        folderId: folderNumericId,
+      })
+      .where(orm.inArray(bookmark.publicId, bookmarkIds));
+
+    if (!data) {
+      throw new ApiError(
+        500,
+        "Failed to add bookmarks to folder",
+        "BOOKMARK_SAVE_FAILED",
+      );
+    }
+
+    return c.json<SuccessResponse<null>>({
+      success: true,
+      data: null,
+      message: `Bookmarks added to selected folder with id ${folderId}`,
+    });
+  },
+);
 
 // -----------------------------------------
 // TOGGLE BOOKMARK PIN, FAVORITE, ARCHIVE
