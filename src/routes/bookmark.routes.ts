@@ -6,7 +6,6 @@ import { getCleanUrl } from "@/utils/parse-url";
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
-import type { z } from "zod";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import {
@@ -15,7 +14,7 @@ import {
   bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
 import { folder } from "../db/schema/folder.schema";
-import { tag, tagUpdateSchema } from "../db/schema/tag.schema";
+import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { BookmarkType } from "../types/schema.types";
@@ -103,10 +102,7 @@ const setBookmarkFlag = async (
 
   const result = await db
     .update(bookmark)
-    .set({
-      [field]: state,
-      updatedAt: orm.sql`NOW()`,
-    })
+    .set({ [field]: state })
     .where(whereBookmarkByUserAndPublicId(await getUserId(c), bookmarkId));
 
   if (result.rowCount === 0) {
@@ -321,7 +317,7 @@ router.get("/", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(400, "No bookmarks found");
+    throw new ApiError(404, "No bookmarks found");
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
@@ -366,7 +362,7 @@ router.get("/tag/:publicId", async (c) => {
 
   if (!tagData) {
     throw new ApiError(
-      400,
+      404,
       `Tag with tagname ${publicId} not found`,
       "INVALID_TAG_NAME",
     );
@@ -374,23 +370,30 @@ router.get("/tag/:publicId", async (c) => {
 
   const { page, limit, offset } = getPagination(c.req.query());
 
-  const data = await db.query.bookmarkTag.findMany({
-    where: orm.and(
-      orm.eq(bookmarkTag.userId, userId),
-      orm.eq(bookmarkTag.tagId, tagData.id),
-    ),
-    with: {
-      bookmark: {
-        with: { bookmarkFolder: { columns: { publicId: true } } },
-      },
-    },
-    limit,
-    offset,
-  });
+  const isPinned = c.req.query("isPinned");
+
+  const data = await db
+    .select({ ...bookmarkPublicFields, folderId: folder.publicId })
+    .from(bookmark)
+    .leftJoin(bookmarkTag, orm.eq(bookmark.id, bookmarkTag.bookmarkId))
+    .leftJoin(tag, orm.eq(bookmarkTag.tagId, tag.id))
+    .rightJoin(folder, orm.eq(folder.id, bookmark.folderId))
+    .where(
+      orm.and(
+        orm.eq(bookmark.isArchived, false),
+        orm.eq(tag.publicId, publicId),
+        typeof isPinned === "undefined"
+          ? undefined
+          : orm.eq(bookmark.isPinned, isPinned === "true"),
+      ),
+    )
+    .offset(offset)
+    .limit(limit)
+    .execute();
 
   if (!data || data.length === 0) {
     throw new ApiError(
-      400,
+      404,
       `No bookmarks associated with tag ${publicId}`,
       "BOOKMARK_NOT_FOUND",
     );
@@ -398,11 +401,7 @@ router.get("/tag/:publicId", async (c) => {
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
     success: true,
-    data: data.map(({ bookmark: { publicId, bookmarkFolder, ...rest } }) => ({
-      ...rest,
-      id: publicId,
-      folderId: bookmarkFolder?.publicId,
-    })),
+    data: data as BookmarkType[],
     message: "Successfully fetched bookmarks",
     pagination: {
       page,
@@ -425,8 +424,10 @@ router.get("/folder/:id", async (c) => {
   }
 
   let condition: orm.SQL<unknown> | undefined;
-
   switch (folderId.toLowerCase().trim()) {
+    case "pinned":
+      condition = orm.eq(bookmark.isPinned, true);
+      break;
     case "archived":
       condition = orm.eq(bookmark.isArchived, true);
       break;
@@ -455,7 +456,10 @@ router.get("/folder/:id", async (c) => {
         );
       }
 
-      condition = orm.eq(bookmark.folderId, folderObj.id);
+      condition = orm.and(
+        orm.eq(bookmark.folderId, folderObj.id),
+        orm.eq(bookmark.isArchived, false),
+      );
     }
   }
 
@@ -474,14 +478,23 @@ router.get("/folder/:id", async (c) => {
   }
 
   const orderBy = getOrderDirection(c.req.query());
+  const isPinned = c.req.query("isPinned");
 
   const data = await db.query.bookmark.findMany({
-    where: orm.and(orm.eq(bookmark.userId, userId), condition, queryCondition),
+    where: orm.and(
+      orm.eq(bookmark.userId, userId),
+      condition,
+      ...(typeof isPinned !== "undefined"
+        ? [orm.eq(bookmark.isPinned, isPinned === "true")]
+        : []),
+      queryCondition,
+    ),
     with: bookmarkJoins,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
         return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
       }
+
       return desc(updatedAt);
     },
     limit,
@@ -490,7 +503,7 @@ router.get("/folder/:id", async (c) => {
 
   if (data.length === 0) {
     throw new ApiError(
-      400,
+      404,
       `No bookmarks exists in folder ${folderId}`,
       "BOOKMARK_NOT_FOUND",
     );

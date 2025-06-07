@@ -6,11 +6,7 @@ import {
   pgTable,
   text,
 } from "drizzle-orm/pg-core";
-import {
-  createInsertSchema,
-  createSelectSchema,
-  createUpdateSchema,
-} from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
