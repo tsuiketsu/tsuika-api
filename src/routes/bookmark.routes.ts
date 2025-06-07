@@ -270,12 +270,16 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   const bookmarkId = data[0].id;
 
-  const tagIds = await getTagIds(
-    userId,
-    tags?.map((tag) => tag.id),
-  );
+  // Insert tags if given
+  let tagsInserted = false;
 
-  const tagsInserted = await insertTags(userId, bookmarkId, tagIds);
+  if (tags && tags.length > 0) {
+    const tagIds = await getTagIds(
+      userId,
+      tags?.map((tag) => tag.id),
+    );
+    tagsInserted = await insertTags(userId, bookmarkId, tagIds);
+  }
 
   const { publicId, ...rest } = data[0];
   return c.json<SuccessResponse<BookmarkType>>(
@@ -661,11 +665,16 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     throw new ApiError(502, "Failed to updated bookmark");
   }
 
-  const tagIds = await getTagIds(
-    userId,
-    tags?.map((tag) => tag.id),
-  );
-  const tagsInserted = await insertTags(userId, prev.id, tagIds);
+  // Insert tags if found
+  let tagsInserted = false;
+
+  if (tags && tags.length > 0) {
+    const tagIds = await getTagIds(
+      userId,
+      tags?.map((tag) => tag.id),
+    );
+    tagsInserted = await insertTags(userId, prev.id, tagIds);
+  }
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
