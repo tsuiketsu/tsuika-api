@@ -3,6 +3,7 @@ import { getImageMedatata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
+import type { SQL } from "bun";
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
@@ -314,6 +315,43 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
     },
     200,
   );
+});
+
+// -----------------------------------------
+// GET TOTAL BOOKMARKS COUNT
+// -----------------------------------------
+router.get("/total-count", async (c) => {
+  const userId = await getUserId(c);
+  const filter = c.req.query("filter");
+
+  let condition: orm.SQL<unknown> | undefined;
+
+  switch (filter) {
+    case "pinned":
+      condition = orm.eq(bookmark.isPinned, true);
+      break;
+    case "archived":
+      condition = orm.eq(bookmark.isArchived, true);
+      break;
+    case "favorites":
+      condition = orm.eq(bookmark.isFavourite, true);
+      break;
+  }
+
+  const data = await db
+    .select({ count: orm.count() })
+    .from(bookmark)
+    .where(orm.and(whereUserId(userId), condition));
+
+  if (!data || data[0] == null) {
+    throw new ApiError(404, "No bookmarks found", "BOOKMARK_NOT_FOUND");
+  }
+
+  return c.json<SuccessResponse<{ total: number }>>({
+    success: true,
+    data: { total: data[0].count },
+    message: "Successfully fetched total bookmarks count",
+  });
 });
 
 // -----------------------------------------

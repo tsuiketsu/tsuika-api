@@ -1,5 +1,5 @@
 import { generatePublicId } from "@/utils/nanoid";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { db } from "../db";
 import { folder } from "../db/schema/folder.schema";
@@ -95,6 +95,28 @@ router.get("/all", async (c) => {
     },
     200,
   );
+});
+
+// -----------------------------------------
+// GET TOTAL FOLDERS COUNT
+// -----------------------------------------
+router.get("/total-count", async (c) => {
+  const userId = await getUserId(c);
+
+  const data = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(folder)
+    .where(eq(folder.userId, userId));
+
+  if (!data || data[0] == null) {
+    throw new ApiError(404, "No folders found", "FOLDER_NOT_FOUND");
+  }
+
+  return c.json<SuccessResponse<{ total: number }>>({
+    success: true,
+    data: { total: data[0].count },
+    message: "Successfully fetched total folders count",
+  });
 });
 
 // -----------------------------------------

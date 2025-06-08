@@ -96,6 +96,28 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
 });
 
 // -----------------------------------------
+// GET TOTAL TAGS COUNT
+// -----------------------------------------
+router.get("/total-count", async (c) => {
+  const userId = await getUserId(c);
+
+  const data = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tag)
+    .where(eq(tag.userId, userId));
+
+  if (!data || data[0] == null) {
+    throw new ApiError(404, "No tags found", "TAG_NOT_FOUND");
+  }
+
+  return c.json<SuccessResponse<{ total: number }>>({
+    success: true,
+    data: { total: data[0].count },
+    message: "Successfully fetched total tags count",
+  });
+});
+
+// -----------------------------------------
 // GET ALL TAGS
 // -----------------------------------------
 router.get("/", async (c) => {
