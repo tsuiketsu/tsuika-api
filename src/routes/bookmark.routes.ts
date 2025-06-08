@@ -710,6 +710,43 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 });
 
 // -----------------------------------------
+// DELETE BOOKMARKS IN BULK
+// -----------------------------------------
+router.delete("/bulk", async (c) => {
+  const userId = await getUserId(c);
+  const { bookmarkIds } = await c.req.json();
+
+  if (!bookmarkIds || bookmarkIds.length === 0) {
+    throw new ApiError(400, "Bookmark IDs are required", "INVALID_PARAMETERS");
+  }
+
+  // Remove bookmark from database
+  const data = await db
+    .delete(bookmark)
+    .where(
+      orm.and(whereUserId(userId), orm.inArray(bookmark.publicId, bookmarkIds)),
+    )
+    .returning({ deletedBookmarkId: bookmark.publicId });
+
+  if (data.length === 0) {
+    throw new ApiError(
+      500,
+      "Failed to delete bookmark",
+      "BOOKMARK_DELETE_FAILED",
+    );
+  }
+
+  return c.json<SuccessResponse<string[]>>(
+    {
+      success: true,
+      data: data.map((item) => item.deletedBookmarkId),
+      message: "Successfully deleted selected bookmarks",
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
 // DELETE BOOKMARK
 // -----------------------------------------
 router.delete(":id", async (c) => {
