@@ -1,9 +1,7 @@
+import { throwError } from "@/errors/handlers";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { user } from "../db/schema/auth.schema";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
-import { bookmark } from "../db/schema/bookmark.schema";
-import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { SuccessResponse } from "../types";
 import {
@@ -11,7 +9,6 @@ import {
   bookmarkTagInsertSchema,
 } from "../types/schema.types";
 import { getUserId } from "../utils";
-import { ApiError } from "../utils/api-error";
 import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
@@ -23,7 +20,11 @@ router.post("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
   const { tagIds, bookmarkId } = c.req.valid("json");
 
   if (!bookmarkId || !tagIds || tagIds.length === 0) {
-    throw new ApiError(400, "bookmarkId and at least one tagId are required.");
+    throwError(
+      "MISSING_PARAMETER",
+      "bookmarkId and at least one tagId are required.",
+      "bookmark-tags.post",
+    );
   }
 
   const userId = await getUserId(c);
@@ -41,9 +42,10 @@ router.post("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
     .returning();
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(
-      400,
+    throwError(
+      "CONFLICT",
       "Failed to add tags to bookmark. One or more tags may already be associated with this bookmark.",
+      "bookmark-tags.post",
     );
   }
 
@@ -64,7 +66,11 @@ router.delete("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
   const { tagIds, bookmarkId } = c.req.valid("json");
 
   if (!bookmarkId || !tagIds || tagIds.length === 0) {
-    throw new ApiError(400, "bookmarkId and at least one tagId are required.");
+    throwError(
+      "REQUIRED_FIELD",
+      "bookmarkId and at least one tagId are required.",
+      "bookmark-tags.delete",
+    );
   }
 
   const userId = await getUserId(c);
@@ -81,9 +87,10 @@ router.delete("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
     .returning();
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(
-      400,
+    throwError(
+      "CONFLICT",
       "Failed to remove tags from bookmark. One or more tags may not be associated with this bookmark",
+      "bookmark-tags.delete",
     );
   }
 

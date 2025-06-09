@@ -1,3 +1,4 @@
+import { throwError } from "@/errors/handlers";
 import type { ProfileType } from "@/types/schema.types";
 import { getUserId } from "@/utils";
 import { zValidator } from "@/utils/validator-wrapper";
@@ -10,7 +11,6 @@ import {
 } from "../db/schema/profile.schema";
 import { createRouter } from "../lib/create-app";
 import type { SuccessResponse } from "../types";
-import { ApiError } from "../utils/api-error";
 
 const router = createRouter();
 
@@ -30,7 +30,7 @@ router.get("/", async (c) => {
   });
 
   if (!data) {
-    throw new ApiError(400, "User profile not found", "PROFILE_NOT_FOUND");
+    throwError("NOT_FOUND", "User profile not found", "profiles.get");
   }
 
   return c.json<SuccessResponse<ProfileType>>(
@@ -65,10 +65,10 @@ router.post("/", zValidator("json", profileInsertSchema), async (c) => {
     .returning();
 
   if (!data || data[0] == null) {
-    throw new ApiError(
-      502,
+    throwError(
+      "INTERNAL_ERROR",
       "Failed to update user preferences",
-      "PROFILE_UPDATE_FAILED",
+      "profiles.post",
     );
   }
 

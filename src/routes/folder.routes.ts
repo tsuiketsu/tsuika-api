@@ -1,4 +1,4 @@
-import { bookmark } from "@/db/schema/bookmark.schema";
+import { throwError } from "@/errors/handlers";
 import { generatePublicId } from "@/utils/nanoid";
 import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import type { Context } from "hono";
@@ -10,7 +10,6 @@ import createFieldValidator from "../middlewares/validate-name.middleware";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { FolderType } from "../types/schema.types";
 import { getPagination, getUserId } from "../utils";
-import { ApiError } from "../utils/api-error";
 import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
@@ -32,7 +31,7 @@ const getFolderId = (c: Context): string => {
   const folderId = c.req.param("id");
 
   if (!folderId) {
-    throw new ApiError(400, "Id is not a valid number", "INVALID_FOLDER_ID");
+    throwError("INVALID_PARAMETER", "Id is not a valid number", "folders.get");
   }
 
   return folderId;
@@ -49,10 +48,10 @@ const verifyFolderExistance = async (folderId: string) => {
   });
 
   if (!data) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `Folder with id ${folderId} not found`,
-      "FOLDER_NOT_FOUND",
+      "folders.get",
     );
   }
 
@@ -85,10 +84,10 @@ router.get("/all", async (c) => {
   // const data = await db.select()
 
   if (data.length === 0) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       "No folders found for the current user",
-      "FOLDER_NOT_FOUND",
+      "folders.get",
     );
   }
 
@@ -114,7 +113,7 @@ router.get("/total-count", async (c) => {
     .where(eq(folder.userId, userId));
 
   if (!data || data[0] == null) {
-    throw new ApiError(404, "No folders found", "FOLDER_NOT_FOUND");
+    throwError("NOT_FOUND", "No folders found", "FOLDER_NOT_FOUND");
   }
 
   return c.json<SuccessResponse<{ total: number }>>(
@@ -130,7 +129,6 @@ router.get("/total-count", async (c) => {
 // -----------------------------------------
 // GET FOLDERS
 // -----------------------------------------
-
 router.get("/", async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
   const folderIds = new URL(c.req.url).searchParams.getAll("id");
@@ -143,8 +141,6 @@ router.get("/", async (c) => {
     condition = inArray(folder.publicId, folderIds);
   }
 
-  console.log(folderIds);
-
   const data = await db
     .select(folderPublicFields)
     .from(folder)
@@ -153,10 +149,10 @@ router.get("/", async (c) => {
     .offset(offset);
 
   if (data.length === 0) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       "No folders found for the current user",
-      "FOLDER_NOT_FOUND",
+      "folders.get",
     );
   }
 
@@ -196,10 +192,10 @@ router.post(
     });
 
     if (doesFolderExists) {
-      throw new ApiError(
-        409,
+      throwError(
+        "CONFLICT",
         `Folder with name ${name} already exists`,
-        "FOLDER_CONFLICT",
+        "folders.post",
       );
     }
 
@@ -214,7 +210,7 @@ router.post(
       .returning(folderPublicFields);
 
     if (data.length === 0 || data[0] == null) {
-      throw new ApiError(502, "Failed to add folder", "FOLDER_CREATE_FAILED");
+      throwError("INTERNAL_ERROR", "Failed to add folder", "folders.post");
     }
 
     return c.json<SuccessResponse<FolderType>>(
@@ -241,10 +237,10 @@ router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
     await verifyFolderExistance(folderId);
 
   if (folderName === name.trim() && folderDesc === description?.trim()) {
-    throw new ApiError(
-      400,
+    throwError(
+      "CONFLICT",
       "Folder name and description are the same as before",
-      "FOLDER_UNCHANGED",
+      "folders.post",
     );
   }
 
@@ -258,7 +254,7 @@ router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
     .returning(folderPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(502, "Failed to update folder", "FOLDER_UPDATE_FAILED");
+    throwError("INTERNAL_ERROR", "Failed to update folder", "folders.put");
   }
 
   return c.json<SuccessResponse<FolderType>>(
@@ -286,7 +282,7 @@ router.delete(":id", async (c) => {
     .returning(folderPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(500, "Failed to delete folder", "FOLDER_DELETE_FAILED");
+    throwError("INTERNAL_ERROR", "Failed to delete folder", "folders.delete");
   }
 
   return c.json<SuccessResponse<FolderType>>(

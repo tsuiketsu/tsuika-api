@@ -1,7 +1,7 @@
 import { db } from "@/db";
+import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import type { SuccessResponse } from "@/types";
-import { ApiError } from "@/utils/api-error";
 
 const router = createRouter();
 
@@ -24,7 +24,7 @@ router.get("/verification-email/:id", async (c) => {
   const id = c.req.param("id");
 
   if (!id) {
-    throw new ApiError(400, "ID is required", "INVALID_PARAMETERS");
+    throwError("REQUIRED_FIELD", "ID is required", "verifications.get");
   }
 
   const data = await db.query.verification.findFirst({
@@ -35,10 +35,10 @@ router.get("/verification-email/:id", async (c) => {
   });
 
   if (!data?.identifier) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `Verification entry with id ${id} not found`,
-      "VERIFICATION_NOT_FOUND",
+      "verifications.get",
     );
   }
 

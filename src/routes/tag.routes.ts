@@ -1,3 +1,4 @@
+import { throwError } from "@/errors/handlers";
 import { generatePublicId } from "@/utils/nanoid";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import type { Context } from "hono";
@@ -14,7 +15,6 @@ import {
 } from "../types";
 import type { TagType } from "../types/schema.types";
 import { getPagination, getUserId } from "../utils";
-import { ApiError } from "../utils/api-error";
 import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
@@ -24,7 +24,7 @@ const getTagId = async (c: Context) => {
   const tagId = c.req.param("id");
 
   if (!tagId) {
-    throw new ApiError(400, "Tag ID is required");
+    throwError("REQUIRED_FIELD", "Tag ID is required", "tags.get");
   }
 
   const isTagExists = await db.query.tag.findFirst({
@@ -32,7 +32,7 @@ const getTagId = async (c: Context) => {
   });
 
   if (!isTagExists) {
-    throw new ApiError(402, `Tag with id ${tagId} not found`);
+    throwError("NOT_FOUND", `Tag with id ${tagId} not found`, "tags.get");
   }
 
   return tagId;
@@ -51,11 +51,7 @@ const tagPublicFields = {
 // ADD NEW TAG
 // -----------------------------------------
 router.post("/", zValidator("json", tagInsertSchema), async (c) => {
-  const userId = c.get("user")?.id;
-
-  if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
-  }
+  const userId = await getUserId(c);
 
   const { name, color } = c.req.valid("json");
 
@@ -64,14 +60,19 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
   });
 
   if (isTagExists) {
-    throw new ApiError(
-      409,
+    throwError(
+      "CONFLICT",
       `Tag with name "${name.toLowerCase()}" already found`,
+      "tags.post",
     );
   }
 
   if (!tinycolor(color).isValid()) {
-    throw new ApiError(400, "Color must be a valid CSS color value");
+    throwError(
+      "INVALID_PARAMETER",
+      "Color must be a valid CSS color value",
+      "tags.post",
+    );
   }
 
   const data: TagType[] = await db
@@ -85,7 +86,7 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
     .returning(tagPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(502, "Failed to add tag");
+    throwError("INTERNAL_ERROR", "Failed to add tag", "tags.post");
   }
 
   return c.json<SuccessResponse<TagType>>(
@@ -110,7 +111,7 @@ router.get("/total-count", async (c) => {
     .where(eq(tag.userId, userId));
 
   if (!data || data[0] == null) {
-    throw new ApiError(404, "No tags found", "TAG_NOT_FOUND");
+    throwError("NOT_FOUND", "No tags found", "tags.get");
   }
 
   return c.json<SuccessResponse<{ total: number }>>(
@@ -131,7 +132,7 @@ router.get("/", async (c) => {
   const orderBy = c.req.query("orderBy")?.toLowerCase() as OrderDirection;
 
   if (orderBy && !orderDirections.includes(orderBy)) {
-    throw new ApiError(400, "Invalid order direction");
+    throwError("INVALID_PARAMETER", "Invalid order direction", "tags.get");
   }
 
   const { offset, limit, page } = getPagination(c.req.query());
@@ -152,7 +153,7 @@ router.get("/", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(400, "No tags found");
+    throwError("NOT_FOUND", "No tags found", "tags.get");
   }
 
   return c.json<PaginatedSuccessResponse<Omit<TagType, "userId">[]>>(
@@ -185,10 +186,12 @@ router.get("/search", async (c) => {
   const name = c.req.query("name")?.toLowerCase().trim();
 
   if (!(name || id)) {
-    throw new ApiError(
-      400,
+    throwError(
+      "MISSING_PARAMETER",
+
       "Missing required parameter: either `name` or `id` must be provided. " +
         "If both are provided, `id` will take priority.",
+      "tags.get",
     );
   }
 
@@ -202,7 +205,11 @@ router.get("/search", async (c) => {
     const parsedId = Number.parseInt(id);
 
     if (Number.isNaN(parsedId)) {
-      throw new ApiError(400, "Tag ID must be a valid number.");
+      throwError(
+        "INVALID_PARAMETER",
+        "Tag ID must be a valid number",
+        "tags.get",
+      );
     }
 
     data = await db
@@ -219,7 +226,7 @@ router.get("/search", async (c) => {
   }
 
   if (!data) {
-    throw new ApiError(400, "Tag not found");
+    throwError("NOT_FOUND", "Tag not found", "tags.get");
   }
 
   console.log(data);
@@ -254,7 +261,7 @@ router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
     .returning(tagPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(502, "Failed to update tag");
+    throwError("INTERNAL_ERROR", "Failed to update tag", "tags.put");
   }
 
   return c.json<SuccessResponse<TagType>>(
@@ -279,7 +286,7 @@ router.delete(":id", async (c) => {
     .where(and(eq(tag.userId, userId), eq(tag.publicId, tagId)));
 
   if (result.rowCount === 0) {
-    throw new ApiError(502, "Failed to delete tag");
+    throwError("INTERNAL_ERROR", "Failed to delete tag", "tags.delete");
   }
 
   return c.json<SuccessResponse>(

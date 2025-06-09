@@ -1,9 +1,9 @@
+import { throwError } from "@/errors/handlers";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
-import type { SQL } from "bun";
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
@@ -21,7 +21,6 @@ import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { BookmarkType } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId } from "../utils";
-import { ApiError } from "../utils/api-error";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
 
@@ -47,7 +46,7 @@ const getBookmarkIdParam = (c: Context) => {
   const id = c.req.param("id");
 
   if (!id) {
-    throw new ApiError(400, "Bookmark ID is required");
+    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
   }
 
   return id;
@@ -64,7 +63,11 @@ const getBookmarkById = async (c: Context) => {
   });
 
   if (!prev) {
-    throw new ApiError(404, `Bookmark with id ${id} does not exists`);
+    throwError(
+      "NOT_FOUND",
+      `Bookmark with id ${id} does not exists`,
+      "bookmars.get",
+    );
   }
 
   return { ...prev, url: prev.url ?? "" };
@@ -74,7 +77,7 @@ const getBookmarkId = async (c: Context) => {
   const id = getBookmarkIdParam(c);
 
   if (!id) {
-    throw new ApiError(400, "Bookmark ID is required");
+    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
   }
 
   c.set("bookmarkId", id);
@@ -85,7 +88,11 @@ const getBookmarkId = async (c: Context) => {
   });
 
   if (!isBookmarkExists) {
-    throw new ApiError(404, `Bookmark with id ${id} does not exists`);
+    throwError(
+      "NOT_FOUND",
+      `Bookmark with id ${id} does not exists`,
+      "bookmarks.get",
+    );
   }
 
   return id;
@@ -99,10 +106,10 @@ const getFolderId = async (userId: string, publicId: string) => {
   });
 
   if (!data) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `Folder with id ${publicId} no found`,
-      "FOLDER_NOT_FOUND",
+      "bookmarks.folders.get",
     );
   }
 
@@ -117,7 +124,7 @@ const setBookmarkFlag = async (
   const { state } = await c.req.json();
 
   if (state == null) {
-    throw new ApiError(400, "State is required");
+    throwError("REQUIRED_FIELD", "State is required", "bookmarks.patch");
   }
 
   const result = await db
@@ -126,7 +133,11 @@ const setBookmarkFlag = async (
     .where(whereBookmarkByUserAndPublicId(await getUserId(c), bookmarkId));
 
   if (result.rowCount === 0) {
-    throw new ApiError(502, `Failed to change ${field} state`);
+    throwError(
+      "DATABASE_ERROR",
+      `Failed to change ${field} state`,
+      "bookmarks.patch",
+    );
   }
 
   return c.json<SuccessResponse>(
@@ -145,10 +156,10 @@ const getFolder = async (folderId: string | undefined, userId: string) => {
     });
 
     if (!data?.id) {
-      throw new ApiError(
-        500,
+      throwError(
+        "NOT_FOUND",
         `Failed to get folder by id ${folderId}`,
-        "FOLDER_NOT_FOUND",
+        "bookmarks.folders.get",
       );
     }
   }
@@ -191,7 +202,7 @@ const getTagIds = async (
   });
 
   if (tags.length === 0) {
-    throw new ApiError(404, "No tags found", "TAG_NOT_FOUND");
+    throwError("NOT_FOUND", "No tags found", "bookmarks.tags.get");
   }
 
   return tags.map(({ id }) => id);
@@ -241,7 +252,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   console.log("Its not reaching here");
 
   if (!url) {
-    throw new ApiError(400, "Url is required", "INVALID_PARAMETERS");
+    throwError("INVALID_PARAMETER", "Url is required", "bookmarks.post");
   }
 
   const userId = await getUserId(c);
@@ -285,7 +296,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
       .returning();
 
   if (data.length === 0 || typeof data[0] === "undefined") {
-    throw new ApiError(502, "Failed to add bookmark");
+    throwError("INTERNAL_ERROR", "Failed to add bookmark", "bookmarks.post");
   }
 
   const bookmarkId = data[0].id;
@@ -344,7 +355,7 @@ router.get("/total-count", async (c) => {
     .where(orm.and(whereUserId(userId), condition));
 
   if (!data || data[0] == null) {
-    throw new ApiError(404, "No bookmarks found", "BOOKMARK_NOT_FOUND");
+    throwError("NOT_FOUND", "No bookmarks found", "bookmarks.get");
   }
 
   return c.json<SuccessResponse<{ total: number }>>(
@@ -381,7 +392,7 @@ router.get("/", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(404, "No bookmarks found");
+    throwError("NOT_FOUND", "No bookmarks found", "bookmarks.get");
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
@@ -417,7 +428,7 @@ router.get("/tag/:publicId", async (c) => {
   const publicId = c.req.param("publicId");
 
   if (!publicId || publicId.trim() === "") {
-    throw new ApiError(400, "Invalid tag id", "INVALID_PARAMETERS");
+    throwError("INVALID_PARAMETER", "Invalid tag id", "bookmark.get");
   }
 
   const tagData = await db.query.tag.findFirst({
@@ -428,10 +439,10 @@ router.get("/tag/:publicId", async (c) => {
   });
 
   if (!tagData) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `Tag with tagname ${publicId} not found`,
-      "INVALID_TAG_NAME",
+      "bookmarks.tags.get",
     );
   }
 
@@ -459,10 +470,10 @@ router.get("/tag/:publicId", async (c) => {
     .execute();
 
   if (!data || data.length === 0) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `No bookmarks associated with tag ${publicId}`,
-      "BOOKMARK_NOT_FOUND",
+      "bookmarks.get",
     );
   }
 
@@ -490,7 +501,7 @@ router.get("/folder/:id", async (c) => {
   const folderId = c.req.param("id");
 
   if (!folderId || folderId.trim() === "") {
-    throw new ApiError(400, "Invalid folder name", "INVALID_FOLDER_NAME");
+    throwError("INVALID_PARAMETER", "Invalid folder name", "bookmarks.get");
   }
 
   let condition: orm.SQL<unknown> | undefined;
@@ -519,10 +530,10 @@ router.get("/folder/:id", async (c) => {
       });
 
       if (!folderObj?.id) {
-        throw new ApiError(
-          404,
+        throwError(
+          "NOT_FOUND",
           `Folder with slug ${folderId} not found`,
-          "FOLDER_NOT_FOUND",
+          "bookmarks.folders.get",
         );
       }
 
@@ -572,10 +583,10 @@ router.get("/folder/:id", async (c) => {
   });
 
   if (data.length === 0) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `No bookmarks exists in folder ${folderId}`,
-      "BOOKMARK_NOT_FOUND",
+      "bookmarks.get",
     );
   }
 
@@ -611,13 +622,13 @@ router.get(":id", async (c) => {
   const userId = c.get("user")?.id;
 
   if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
+    throwError("UNAUTHORIZED", "Unauthorized access detected", "bookmarks.get");
   }
 
   const bookmarkId = await getBookmarkId(c);
 
   if (!bookmarkId) {
-    throw new ApiError(400, "Bookmark ID is required");
+    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
   }
 
   const data = await db.query.bookmark.findFirst({
@@ -626,10 +637,10 @@ router.get(":id", async (c) => {
   });
 
   if (!data) {
-    throw new ApiError(
-      404,
+    throwError(
+      "NOT_FOUND",
       `Bookmark with ${bookmarkId} not found`,
-      "BOOKMARK_NOT_FOUND",
+      "bookmarks.get",
     );
   }
 
@@ -670,23 +681,14 @@ router.get(":id", async (c) => {
 // UPDATE BOOKMARK
 // -----------------------------------------
 router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
-  const userId = c.get("user")?.id;
-
-  if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
-  }
+  const userId = await getUserId(c);
 
   // Get previous bookmark id and url
   const prev = await getBookmarkById(c);
 
   const { folderId, title, url, description, tags } = c.req.valid("json");
 
-  const user = c.get("user");
   const folderData = await getFolder(folderId, userId);
-
-  if (!user) {
-    throw new ApiError(401, "Failed to add bookmark, user not found");
-  }
 
   let siteMeta: LinkPreviewResponsse | undefined;
 
@@ -731,7 +733,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     .returning(bookmarkPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throw new ApiError(502, "Failed to updated bookmark");
+    throwError("INTERNAL_ERROR", "Failed to updated bookmark", "bookmarks.put");
   }
 
   // Insert tags if found
@@ -767,7 +769,11 @@ router.delete("/bulk", async (c) => {
   const { bookmarkIds } = await c.req.json();
 
   if (!bookmarkIds || bookmarkIds.length === 0) {
-    throw new ApiError(400, "Bookmark IDs are required", "INVALID_PARAMETERS");
+    throwError(
+      "MISSING_PARAMETER",
+      "Bookmark IDs are required",
+      "bookmarks.delete",
+    );
   }
 
   // Remove bookmark from database
@@ -779,10 +785,10 @@ router.delete("/bulk", async (c) => {
     .returning({ deletedBookmarkId: bookmark.publicId });
 
   if (data.length === 0) {
-    throw new ApiError(
-      500,
+    throwError(
+      "INTERNAL_ERROR",
       "Failed to delete bookmark",
-      "BOOKMARK_DELETE_FAILED",
+      "bookmark.delete",
     );
   }
 
@@ -810,7 +816,11 @@ router.delete(":id", async (c) => {
     .returning({ deletedBookmarkId: bookmark.publicId });
 
   if (data.length === 0) {
-    throw new ApiError(502, "Failed to delete bookmark");
+    throwError(
+      "INTERNAL_ERROR",
+      "Failed to delete bookmark",
+      "bookmarks.delete",
+    );
   }
 
   return c.json(
@@ -835,14 +845,22 @@ router.patch(":id/thumbnail", async (c) => {
   const localThumbnailUrl = body["path"];
 
   if (!localThumbnailUrl || !(localThumbnailUrl instanceof File)) {
-    throw new ApiError(400, "Thumbnail image file is required");
+    throwError(
+      "REQUIRED_FIELD",
+      "Thumbnail image file is required",
+      "bookmarks.patch",
+    );
   }
 
   // Upload thumbnail on imagekit
   const thumbnail = await uploadOnImageKit(localThumbnailUrl);
 
   if (!thumbnail || !thumbnail.fileId) {
-    throw new ApiError(thumbnail?.status || 502, thumbnail?.message);
+    throwError(
+      "THIRD_PARTY_SERVICE_FAILED",
+      thumbnail.message || "Failed to updated thumbnail",
+      "bookmarks.patch",
+    );
   }
 
   // Get previous thumbnail url before updating
@@ -866,7 +884,11 @@ router.patch(":id/thumbnail", async (c) => {
     });
 
   if (data.length === 0 || data[0] == null || data[0]?.thumbnail == null) {
-    throw new ApiError(502, "Failed to update thumbnail");
+    throwError(
+      "THIRD_PARTY_SERVICE_FAILED",
+      "Failed to update thumbnail",
+      "bookmarks.patch",
+    );
   }
 
   // Delete & purge old thumbnail
@@ -900,13 +922,17 @@ router.patch(
     const folderId = c.req.param("folderId");
 
     if (!folderId) {
-      throw new ApiError(400, "folderId  required", "INVALID_PARAMETERS");
+      throwError("MISSING_PARAMETER", "folderId  required", "bookmarks.patch");
     }
 
     const { bookmarkIds } = c.req.valid("json");
 
     if (bookmarkIds.length === 0) {
-      throw new ApiError(400, "bookmarkIds are empty", "INVALID_PARAMETERS");
+      throwError(
+        "INVALID_PARAMETER",
+        "bookmarkIds are empty",
+        "bookmarks.patch",
+      );
     }
 
     const userId = await getUserId(c);
@@ -920,10 +946,10 @@ router.patch(
       .where(orm.inArray(bookmark.publicId, bookmarkIds));
 
     if (!data) {
-      throw new ApiError(
-        500,
+      throwError(
+        "DATABASE_ERROR",
         "Failed to add bookmarks to folder",
-        "BOOKMARK_SAVE_FAILED",
+        "bookmarks.patch",
       );
     }
 
