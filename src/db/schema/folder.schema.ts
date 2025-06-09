@@ -1,8 +1,8 @@
 import { bigserial, pgTable, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { timestamps } from "../constants";
 import { user } from "./auth.schema";
-import { timestamps } from "./constants";
 
 export const folder = pgTable("folders", {
   id: bigserial("id", { mode: "number" }).primaryKey(),

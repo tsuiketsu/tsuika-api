@@ -6,9 +6,9 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import { z } from "zod";
+import { timestamps } from "../constants";
 import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
-import { timestamps } from "./constants";
 
 export const tag = pgTable("tags", {
   id: bigserial("id", { mode: "number" }).primaryKey(),

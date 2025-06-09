@@ -1,6 +1,7 @@
-import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { timestamps } from "../constants";
 import { user } from "./auth.schema";
 
 export const profile = pgTable("profiles", {
@@ -10,8 +11,7 @@ export const profile = pgTable("profiles", {
     })
     .primaryKey(),
   preferencesJson: jsonb(),
-  createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp({ withTimezone: true }).defaultNow(),
+  ...timestamps,
 });
 
 export const profileSelectSchema = createSelectSchema(profile).omit({

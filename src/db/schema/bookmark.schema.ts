@@ -8,9 +8,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { timestamps } from "../constants";
 import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
-import { timestamps } from "./constants";
 import { folder } from "./folder.schema";
 import { tagSelectSchema } from "./tag.schema";
 
