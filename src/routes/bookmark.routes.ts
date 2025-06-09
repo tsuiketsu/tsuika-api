@@ -347,11 +347,14 @@ router.get("/total-count", async (c) => {
     throw new ApiError(404, "No bookmarks found", "BOOKMARK_NOT_FOUND");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>({
-    success: true,
-    data: { total: data[0].count },
-    message: "Successfully fetched total bookmarks count",
-  });
+  return c.json<SuccessResponse<{ total: number }>>(
+    {
+      success: true,
+      data: { total: data[0].count },
+      message: "Successfully fetched total bookmarks count",
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
@@ -381,26 +384,29 @@ router.get("/", async (c) => {
     throw new ApiError(404, "No bookmarks found");
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
-    success: true,
-    message: "Successfully fetched all bookmarks",
-    data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
-      ...rest,
-      id: publicId,
-      folderId: bookmarkFolder?.publicId,
-      tags: bookmarkTag.map(({ tag, appliedAt }) => ({
-        ...tag,
-        id: tag.publicId,
-        appliedAt,
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+    {
+      success: true,
+      message: "Successfully fetched all bookmarks",
+      data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
+        ...rest,
+        id: publicId,
+        folderId: bookmarkFolder?.publicId,
+        tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+          ...tag,
+          id: tag.publicId,
+          appliedAt,
+        })),
       })),
-    })),
-    pagination: {
-      page,
-      limit,
-      total: data.length,
-      hasMore: data.length === limit,
+      pagination: {
+        page,
+        limit,
+        total: data.length,
+        hasMore: data.length === limit,
+      },
     },
-  });
+    200,
+  );
 });
 
 // -----------------------------------------
@@ -460,17 +466,20 @@ router.get("/tag/:publicId", async (c) => {
     );
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
-    success: true,
-    data: data as BookmarkType[],
-    message: "Successfully fetched bookmarks",
-    pagination: {
-      page,
-      limit,
-      total: data.length,
-      hasMore: data.length === limit,
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+    {
+      success: true,
+      data: data as BookmarkType[],
+      message: "Successfully fetched bookmarks",
+      pagination: {
+        page,
+        limit,
+        total: data.length,
+        hasMore: data.length === limit,
+      },
     },
-  });
+    200,
+  );
 });
 
 // -----------------------------------------
@@ -570,26 +579,29 @@ router.get("/folder/:id", async (c) => {
     );
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>({
-    success: true,
-    message: "Successfully fetched all bookmarks",
-    data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
-      ...rest,
-      id: publicId,
-      folderId: bookmarkFolder?.publicId,
-      tags: bookmarkTag.map(({ tag, appliedAt }) => ({
-        ...tag,
-        id: tag.publicId,
-        appliedAt,
+  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+    {
+      success: true,
+      message: "Successfully fetched all bookmarks",
+      data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
+        ...rest,
+        id: publicId,
+        folderId: bookmarkFolder?.publicId,
+        tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+          ...tag,
+          id: tag.publicId,
+          appliedAt,
+        })),
       })),
-    })),
-    pagination: {
-      page,
-      limit,
-      total: data.length,
-      hasMore: data.length === limit,
+      pagination: {
+        page,
+        limit,
+        total: data.length,
+        hasMore: data.length === limit,
+      },
     },
-  });
+    200,
+  );
 });
 
 // -----------------------------------------
@@ -915,11 +927,14 @@ router.patch(
       );
     }
 
-    return c.json<SuccessResponse<null>>({
-      success: true,
-      data: null,
-      message: `Bookmarks added to selected folder with id ${folderId}`,
-    });
+    return c.json<SuccessResponse<null>>(
+      {
+        success: true,
+        data: null,
+        message: `Bookmarks added to selected folder with id ${folderId}`,
+      },
+      200,
+    );
   },
 );
 

@@ -88,11 +88,14 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
     throw new ApiError(502, "Failed to add tag");
   }
 
-  return c.json<SuccessResponse<TagType>>({
-    success: true,
-    message: "Successfully added tag",
-    data: data[0],
-  });
+  return c.json<SuccessResponse<TagType>>(
+    {
+      success: true,
+      message: "Successfully added tag",
+      data: data[0],
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
@@ -110,11 +113,14 @@ router.get("/total-count", async (c) => {
     throw new ApiError(404, "No tags found", "TAG_NOT_FOUND");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>({
-    success: true,
-    data: { total: data[0].count },
-    message: "Successfully fetched total tags count",
-  });
+  return c.json<SuccessResponse<{ total: number }>>(
+    {
+      success: true,
+      data: { total: data[0].count },
+      message: "Successfully fetched total tags count",
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
