@@ -19,6 +19,31 @@ const whereUserId = (userId: string) => {
 };
 
 // -----------------------------------------
+// GET USER PROFILE
+// -----------------------------------------
+router.get("/", async (c) => {
+  const userId = await getUserId(c);
+
+  const data = await db.query.profile.findFirst({
+    where: whereUserId(userId),
+    columns: { userId: false },
+  });
+
+  if (!data) {
+    throw new ApiError(400, "User profile not found", "PROFILE_NOT_FOUND");
+  }
+
+  return c.json<SuccessResponse<ProfileType>>(
+    {
+      success: true,
+      data: data as ProfileType,
+      message: "Successfully fetched user's profile",
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
 // Update Preferences
 // -----------------------------------------
 router.post("/", zValidator("json", profileInsertSchema), async (c) => {
