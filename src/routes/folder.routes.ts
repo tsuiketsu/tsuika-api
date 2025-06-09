@@ -1,5 +1,6 @@
+import { bookmark } from "@/db/schema/bookmark.schema";
 import { generatePublicId } from "@/utils/nanoid";
-import { and, eq, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import { db } from "../db";
 import { folder } from "../db/schema/folder.schema";
@@ -58,6 +59,10 @@ const verifyFolderExistance = async (folderId: string) => {
   return data;
 };
 
+const whereUserId = (userId: string) => {
+  return eq(folder.userId, userId);
+};
+
 export const folderPublicFields = {
   id: folder.publicId,
   name: folder.name,
@@ -75,7 +80,7 @@ router.get("/all", async (c) => {
   const data = await db
     .select(folderPublicFields)
     .from(folder)
-    .where(eq(folder.userId, userId));
+    .where(whereUserId(userId));
 
   // const data = await db.select()
 
@@ -112,25 +117,38 @@ router.get("/total-count", async (c) => {
     throw new ApiError(404, "No folders found", "FOLDER_NOT_FOUND");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>({
-    success: true,
-    data: { total: data[0].count },
-    message: "Successfully fetched total folders count",
-  });
+  return c.json<SuccessResponse<{ total: number }>>(
+    {
+      success: true,
+      data: { total: data[0].count },
+      message: "Successfully fetched total folders count",
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
 // GET FOLDERS
 // -----------------------------------------
+
 router.get("/", async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
+  const folderIds = new URL(c.req.url).searchParams.getAll("id");
 
   const userId = await getUserId(c);
+
+  let condition: SQL<unknown> | undefined;
+
+  if (folderIds && folderIds.length > 0) {
+    condition = inArray(folder.publicId, folderIds);
+  }
+
+  console.log(folderIds);
 
   const data = await db
     .select(folderPublicFields)
     .from(folder)
-    .where(eq(folder.userId, userId))
+    .where(and(whereUserId(userId), condition))
     .limit(limit)
     .offset(offset);
 
