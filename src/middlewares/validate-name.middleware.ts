@@ -1,6 +1,6 @@
+import { ApiError } from "@/errors/api-error";
 import type { Context, Next } from "hono";
 import { INVALID_CHARS } from "../constants";
-import { ApiError } from "../utils/api-error";
 
 interface ValidationRules {
   fieldName: string;

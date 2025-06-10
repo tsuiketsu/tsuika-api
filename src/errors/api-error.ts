@@ -7,7 +7,7 @@ class ApiError extends HTTPException {
     statusCode: ContentfulStatusCode,
     message: string,
     code: ErrorCodeKey | (string & {}),
-    source: string,
+    source?: string,
     errors: Error[] = [],
   ) {
     super(statusCode, {

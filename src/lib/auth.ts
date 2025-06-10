@@ -1,5 +1,5 @@
+import { throwError } from "@/errors/handlers";
 import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
-import { ApiError } from "@/utils/api-error";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, twoFactor } from "better-auth/plugins";
@@ -78,10 +78,10 @@ export const auth = betterAuth({
         });
 
         if (!verification?.id) {
-          throw new ApiError(
-            500,
+          throwError(
+            "INTERNAL_ERROR",
             "Failed to generate verification otp",
-            "OTP_GENERATION_FAILED",
+            "auth.get",
           );
         }
 

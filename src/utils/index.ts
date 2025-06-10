@@ -1,3 +1,4 @@
+import { throwError } from "@/errors/handlers";
 import type { Context } from "hono";
 import {
   DEFAULT_QUERY_LIMIT,
@@ -6,13 +7,12 @@ import {
 } from "../constants";
 import type { AuthType } from "../lib/create-app";
 import { type OrderDirection, orderDirections } from "../types";
-import { ApiError } from "./api-error";
 
 export const getUserId = async (c: Context<AuthType>): Promise<string> => {
   const userId = c.get("user")?.id;
 
   if (!userId) {
-    throw new ApiError(401, "Unauthorized access detected");
+    throwError("UNAUTHORIZED", "Unauthorized access detected", "sessions.get");
   }
 
   return userId;
@@ -34,11 +34,16 @@ export const getPagination = (
 
 export const getOrderDirection = (
   query: Record<string, string | undefined>,
+  source?: string,
 ): OrderDirection => {
   const orderBy = query?.orderBy as OrderDirection;
 
   if (orderBy && !orderDirections.includes(orderBy)) {
-    throw new ApiError(400, "Invalid order direction");
+    throwError(
+      "INVALID_PARAMETER",
+      "Invalid order direction",
+      source || "utils",
+    );
   }
 
   return orderBy;
