@@ -52,3 +52,8 @@ export const getOrderDirection = (
 export const isInvalidName = (name: string) => {
   return INVALID_CHARS.test(name);
 };
+
+export const isValidDateString = (str: string) => {
+  const date = new Date(str);
+  return !Number.isNaN(date.getTime());
+};

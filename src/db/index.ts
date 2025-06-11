@@ -3,8 +3,10 @@ import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import * as authSchema from "./schema/auth.schema";
 import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
+import * as bookmarkReminders from "./schema/bookmark.schema";
 import * as folderSchema from "./schema/folder.schema";
 import * as profileSchema from "./schema/profile.schema";
+import * as reminderSchema from "./schema/reminder.schema";
 import * as tagSchema from "./schema/tag.schema";
 
 const connectionString = process.env.DATABASE_URL;
@@ -23,7 +25,7 @@ if (process.env.NODE_ENV === "development") {
     host === "db.localtest.me" ? `${host}:4444/v2` : `${host}/v2`;
 }
 
-const sql = neon(connectionString);
+export const sql = neon(connectionString);
 
 // HTTP Client:
 // - Best for serverless functions and Lambda environments
@@ -38,6 +40,8 @@ export const db = drizzleHttp({
     ...tagSchema,
     ...bookmarkTagSchema,
     ...folderSchema,
+    ...reminderSchema,
+    ...bookmarkReminders,
   },
   client: sql,
   casing: "snake_case",

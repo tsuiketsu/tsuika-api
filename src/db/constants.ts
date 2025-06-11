@@ -1,4 +1,5 @@
-import { timestamp } from "drizzle-orm/pg-core";
+import { text, timestamp } from "drizzle-orm/pg-core";
+import { user } from "./schema/auth.schema";
 
 export const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -8,3 +9,9 @@ export const timestamps = {
     .defaultNow()
     .notNull(),
 };
+
+export const referenceUser = text()
+  .references(() => user.id, {
+    onDelete: "cascade",
+  })
+  .notNull();

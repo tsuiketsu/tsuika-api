@@ -73,7 +73,7 @@ const getBookmarkById = async (c: Context) => {
   return { ...prev, url: prev.url ?? "" };
 };
 
-const getBookmarkId = async (c: Context) => {
+export const getBookmarkId = async (c: Context) => {
   const id = getBookmarkIdParam(c);
 
   if (!id) {
@@ -375,7 +375,7 @@ router.get("/", async (c) => {
   const userId = await getUserId(c);
   const { page, limit, offset } = getPagination(c.req.query());
 
-  const orderBy = getOrderDirection(c.req.query());
+  const orderBy = getOrderDirection(c.req.query(), "bookmarks.get");
 
   const data = await db.query.bookmark.findMany({
     where: orm.eq(bookmark.userId, userId),
@@ -558,7 +558,7 @@ router.get("/folder/:id", async (c) => {
     );
   }
 
-  const orderBy = getOrderDirection(c.req.query());
+  const orderBy = getOrderDirection(c.req.query(), "folders.get");
   const isPinned = c.req.query("isPinned");
 
   const data = await db.query.bookmark.findMany({
