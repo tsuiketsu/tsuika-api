@@ -1,5 +1,5 @@
 import type { profileSelectSchema } from "@/db/schema/profile.schema";
-import type { reminderSelectSchema } from "@/db/schema/reminder.schema";
+import type { bookmarkTaskSelectSchema } from "@/db/schema/task.schema";
 import { z } from "zod";
 import type { bookmarkTagSelectSchema } from "../db/schema/bookmark-tag.schema";
 import type { bookmarkSelectSchema } from "../db/schema/bookmark.schema";
@@ -18,8 +18,8 @@ export const bookmarkTagInsertSchema = z.object({
 
 export type FolderType = z.infer<typeof folderSelectSchema>;
 
-// Reminder Types
-export type Reminder = z.infer<typeof reminderSelectSchema> & {
+// Task Types
+export type Task = z.infer<typeof bookmarkTaskSelectSchema> & {
   type: ContentCategoryType;
 };
 
@@ -32,16 +32,16 @@ export const contentCategoryTypes = {
 export type ContentCategoryType =
   (typeof contentCategoryTypes)[keyof typeof contentCategoryTypes];
 
-export enum ReminderStatus {
+export enum TaskStatus {
   PENDING = "pending",
   DISMISSED = "dismissed",
   DONE = "done",
 }
 
-export enum ReminderPriority {
+export enum TaskPriority {
   LOW = "low",
   NORMAL = "normal",
   HIGH = "high",
 }
 
-export type ReminderType = z.infer<typeof reminderSelectSchema>;
+export type TaskType = z.infer<typeof bookmarkTaskSelectSchema>;

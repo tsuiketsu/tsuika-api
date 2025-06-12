@@ -1,14 +1,14 @@
 import { db } from "@/db";
 import { bookmark } from "@/db/schema/bookmark.schema";
-import { reminderInsertSchema } from "@/db/schema/reminder.schema";
-import { bookmarkReminder } from "@/db/schema/reminder.schema";
+import { bookmarkTaskInsertSchema } from "@/db/schema/task.schema";
+import { bookmarkTask } from "@/db/schema/task.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "@/types";
 import {
   type ContentCategoryType,
-  type Reminder,
-  type ReminderType,
+  type Task,
+  type TaskType,
   contentCategoryTypes as cat,
   contentCategoryTypes,
 } from "@/types/schema.types";
@@ -40,27 +40,27 @@ const getContentRowId = async (
     throwError(
       "NOT_FOUND",
       `Bookmark with id ${publicId} not found`,
-      "reminders.bookmarks.get",
+      "tasks.bookmarks.get",
     );
   }
 
   return data.id;
 };
 
-const whereUserId = (userId: string) => eq(bookmarkReminder.userId, userId);
-const wherePublicId = (id: string) => eq(bookmarkReminder.publicId, id);
+const whereUserId = (userId: string) => eq(bookmarkTask.userId, userId);
+const wherePublicId = (id: string) => eq(bookmarkTask.publicId, id);
 
 const selectPublicFields = {
-  id: bookmarkReminder.publicId,
-  note: bookmarkReminder.note,
-  status: bookmarkReminder.status,
-  priority: bookmarkReminder.priority,
-  isDone: bookmarkReminder.isDone,
-  remindDate: bookmarkReminder.remindDate,
-  createdAt: bookmarkReminder.createdAt,
-  updatedAt: bookmarkReminder.updatedAt,
+  id: bookmarkTask.publicId,
+  note: bookmarkTask.note,
+  status: bookmarkTask.status,
+  priority: bookmarkTask.priority,
+  isDone: bookmarkTask.isDone,
+  remindAt: bookmarkTask.remindAt,
+  createdAt: bookmarkTask.createdAt,
+  updatedAt: bookmarkTask.updatedAt,
 } satisfies {
-  [key in keyof typeof bookmarkReminder]?: unknown;
+  [key in keyof typeof bookmarkTask]?: unknown;
 };
 
 export const contentPublicFields = {
@@ -73,21 +73,16 @@ export const contentPublicFields = {
 } satisfies Partial<Record<ContentCategoryType, unknown>>;
 
 // -----------------------------------------
-// INSERT REMINDER
+// INSERT TASK
 // -----------------------------------------
-const insertSchema = reminderInsertSchema.extend({
+const insertSchema = bookmarkTaskInsertSchema.extend({
   type: z.enum(
     Object.values(cat) as [ContentCategoryType, ...ContentCategoryType[]],
   ),
 });
 
 router.post("/:id", zValidator("json", insertSchema), async (c) => {
-  const {
-    priority,
-    note,
-    remindDate: reminderDate,
-    type,
-  } = c.req.valid("json");
+  const { priority, note, remindAt: reminderDate, type } = c.req.valid("json");
 
   const contentPublicId = c.req.param("id");
 
@@ -95,38 +90,38 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
 
   const contentId = await getContentRowId(userId, contentPublicId, type);
   const publicId = generatePublicId();
-  const remindDate = new Date(reminderDate);
+  const remindAt = new Date(reminderDate);
 
-  const reminderRow = await db.query.bookmarkReminder.findFirst({
+  const taskRow = await db.query.bookmarkTask.findFirst({
     where: (r, { and, eq }) => and(eq(r.userId, userId)),
     columns: { id: true },
   });
 
-  if (typeof reminderRow !== "undefined") {
-    throwError("CONFLICT", "Reminder already exists", "reminders.post");
+  if (typeof taskRow !== "undefined") {
+    throwError("CONFLICT", "Task already exists", "tasks.post");
   }
 
   const data = await db
-    .insert(bookmarkReminder)
-    .values({ publicId, userId, note, remindDate, priority, contentId })
+    .insert(bookmarkTask)
+    .values({ publicId, userId, note, remindAt, priority, contentId })
     .returning(selectPublicFields);
 
   if (!data || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to add reminder", "reminders.post");
+    throwError("INTERNAL_ERROR", "Failed to add task", "tasks.post");
   }
 
-  return c.json<SuccessResponse<Reminder>>(
+  return c.json<SuccessResponse<Task>>(
     {
       success: true,
       data: { ...data[0], type },
-      message: "Successfully added reminder",
+      message: "Successfully added task",
     },
     200,
   );
 });
 
 // -----------------------------------------
-// GET ALL REMINDERS
+// GET ALL TASKS
 // -----------------------------------------
 router.get("/", async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
@@ -137,20 +132,20 @@ router.get("/", async (c) => {
       ...selectPublicFields,
       content: contentPublicFields.bookmark,
     })
-    .from(bookmarkReminder)
-    .where(eq(bookmarkReminder.userId, userId))
-    .leftJoin(bookmark, eq(bookmark.id, bookmarkReminder.contentId))
+    .from(bookmarkTask)
+    .where(eq(bookmarkTask.userId, userId))
+    .leftJoin(bookmark, eq(bookmark.id, bookmarkTask.contentId))
     .offset(offset)
     .limit(limit);
 
   if (!data || data[0] == null) {
-    throwError("NOT_FOUND", "Reminders not found", "reminders.get");
+    throwError("NOT_FOUND", "Tasks not found", "tasks.get");
   }
 
-  return c.json<PaginatedSuccessResponse<Reminder[]>>(
+  return c.json<PaginatedSuccessResponse<Task[]>>(
     {
       success: true,
-      message: "Successfully fetched reminders",
+      message: "Successfully fetched tasks",
       data: data.map((item) => ({
         ...item,
         type: contentCategoryTypes.BOOKMARK,
@@ -167,47 +162,47 @@ router.get("/", async (c) => {
 });
 
 // -----------------------------------------
-// UPDATE REMINDER
+// UPDATE TASK
 // -----------------------------------------
-router.put("/:id", zValidator("json", reminderInsertSchema), async (c) => {
-  const { note, remindDate: remindDateStr, priority } = c.req.valid("json");
+router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
+  const { note, remindAt: remindAtStr, priority } = c.req.valid("json");
   const userId = await getUserId(c);
 
   const publicId = c.req.param("id");
 
   if (!publicId) {
-    throwError("REQUIRED_FIELD", "id is required", "reminders.put");
+    throwError("REQUIRED_FIELD", "id is required", "tasks.put");
   }
 
-  const remindDate = new Date(remindDateStr);
+  const remindAt = new Date(remindAtStr);
 
-  if (Number.isNaN(remindDate.getTime())) {
+  if (Number.isNaN(remindAt.getTime())) {
     throwError(
       "INVALID_PARAMETER",
-      "remindDate is a invalid date string",
-      "reminders.put",
+      "remindAt is a invalid date string",
+      "tasks.put",
     );
   }
 
   const data = await db
-    .update(bookmarkReminder)
-    .set({ note, remindDate, priority })
+    .update(bookmarkTask)
+    .set({ note, remindAt, priority })
     .where(and(whereUserId(userId), wherePublicId(publicId)))
     .returning(selectPublicFields);
 
   if (!data || data[0] == null) {
     throwError(
       "INTERNAL_ERROR",
-      `Failed to update reminder with id "${publicId}"`,
-      "reminders.get",
+      `Failed to update task with id "${publicId}"`,
+      "tasks.get",
     );
   }
 
-  return c.json<SuccessResponse<ReminderType>>(
+  return c.json<SuccessResponse<TaskType>>(
     {
       success: true,
       data: data[0],
-      message: "Successfully updated reminder",
+      message: "Successfully updated task",
     },
     200,
   );

@@ -3,11 +3,11 @@ import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import * as authSchema from "./schema/auth.schema";
 import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
-import * as bookmarkReminders from "./schema/bookmark.schema";
+import * as bookmarkTasks from "./schema/bookmark.schema";
 import * as folderSchema from "./schema/folder.schema";
 import * as profileSchema from "./schema/profile.schema";
-import * as reminderSchema from "./schema/reminder.schema";
 import * as tagSchema from "./schema/tag.schema";
+import * as taskSchema from "./schema/task.schema";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -40,8 +40,8 @@ export const db = drizzleHttp({
     ...tagSchema,
     ...bookmarkTagSchema,
     ...folderSchema,
-    ...reminderSchema,
-    ...bookmarkReminders,
+    ...taskSchema,
+    ...bookmarkTasks,
   },
   client: sql,
   casing: "snake_case",

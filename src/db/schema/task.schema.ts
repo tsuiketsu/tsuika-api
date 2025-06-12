@@ -19,7 +19,7 @@ export const status = pgEnum("status", ["pending", "dismissed", "done"]);
 export const priority = pgEnum("priority", ["low", "normal", "high"]);
 
 // Schema
-export const bookmarkReminder = pgTable("bookmark_reminders", {
+export const bookmarkTask = pgTable("bookmark_tasks", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   publicId: text().notNull().unique(),
   contentId: integer()
@@ -31,21 +31,21 @@ export const bookmarkReminder = pgTable("bookmark_reminders", {
   status: status().default("pending"),
   priority: priority().default("normal"),
   isDone: boolean().notNull().default(false),
-  remindDate: timestamp({ withTimezone: true }).notNull(),
+  remindAt: timestamp({ withTimezone: true }).notNull(),
   ...timestamps,
 });
 
 // Relations
-export const reminderRelations = relations(bookmarkReminder, ({ one }) => ({
+export const bookmarkTasksRelations = relations(bookmarkTask, ({ one }) => ({
   owner: one(user, {
-    fields: [bookmarkReminder.userId],
+    fields: [bookmarkTask.userId],
     references: [user.id],
     relationName: "owner",
   }),
 }));
 
 // Validations
-export const reminderSelectSchema = createSelectSchema(bookmarkReminder, {
+export const bookmarkTaskSelectSchema = createSelectSchema(bookmarkTask, {
   id: z.string(),
 }).omit({
   publicId: true,
@@ -53,15 +53,13 @@ export const reminderSelectSchema = createSelectSchema(bookmarkReminder, {
   contentId: true,
 });
 
-export const reminderInsertSchema = createInsertSchema(bookmarkReminder, {
+export const bookmarkTaskInsertSchema = createInsertSchema(bookmarkTask, {
   note: (z) => z.max(255),
-  remindDate: z
-    .string()
-    .refine((val) => !Number.isNaN(new Date(val).getTime()), {
-      message: "Invalid date string",
-    }),
+  remindAt: z.string().refine((val) => !Number.isNaN(new Date(val).getTime()), {
+    message: "Invalid date string",
+  }),
 }).pick({
   note: true,
   priority: true,
-  remindDate: true,
+  remindAt: true,
 });
