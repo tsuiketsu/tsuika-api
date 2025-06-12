@@ -8,6 +8,7 @@ import type { PaginatedSuccessResponse, SuccessResponse } from "@/types";
 import {
   type ContentCategoryType,
   type Task,
+  TaskStatus,
   type TaskType,
   contentCategoryTypes as cat,
   contentCategoryTypes,
@@ -206,6 +207,81 @@ router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
     },
     200,
   );
+});
+
+// -----------------------------------------
+// SET TASK STATUS
+// -----------------------------------------
+router.patch("/:id", async (c) => {
+  const publicId = c.req.param("id");
+
+  if (!publicId) {
+    throwError("REQUIRED_FIELD", "id is required", "tasks.put");
+  }
+
+  const status = c.req.query("status");
+
+  if (!status || !Object.values(TaskStatus).includes(status as TaskStatus)) {
+    throwError(
+      "INVALID_PARAMETER",
+      `Only [ ${Object.values(TaskStatus).join(" | ")} ] are valid TaskStatus values.`,
+      "tasks.patch",
+    );
+  }
+
+  const userId = await getUserId(c);
+
+  const data = await db
+    .update(bookmarkTask)
+    .set({
+      status: status as TaskStatus,
+    })
+    .where(and(whereUserId(userId), eq(bookmarkTask.publicId, publicId)))
+    .returning({ id: bookmarkTask.publicId, status: bookmarkTask.status });
+
+  if (!data || data[0] == null) {
+    throwError("INTERNAL_ERROR", "Failed to set status of task", "tasks.patch");
+  }
+
+  return c.json<SuccessResponse<{ id: string; status: TaskStatus }>>({
+    success: true,
+    data: { ...data[0], status: data[0].status as TaskStatus },
+    message: `Successfully set task status to ${status}`,
+  });
+});
+
+// -----------------------------------------
+// DELETE TASK
+// -----------------------------------------
+router.delete("/:id", async (c) => {
+  const publicId = c.req.param("id");
+
+  if (!publicId) {
+    throwError("REQUIRED_FIELD", "id is required", "tasks.put");
+  }
+
+  const userId = await getUserId(c);
+
+  const data = await db
+    .delete(bookmarkTask)
+    .where(and(whereUserId(userId), eq(bookmarkTask.publicId, publicId)))
+    .returning({
+      deletedId: bookmarkTask.publicId,
+    });
+
+  if (!data || data[0] == null) {
+    throwError(
+      "INTERNAL_ERROR",
+      `Failed to delete task with id "${publicId}"`,
+      "tasks.delete",
+    );
+  }
+
+  return c.json<SuccessResponse<{ deletedId: string }>>({
+    success: true,
+    data: data[0],
+    message: `Successfully deleted task with id "${publicId}"`,
+  });
 });
 
 export default router;
