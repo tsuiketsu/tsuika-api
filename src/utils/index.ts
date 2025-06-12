@@ -57,3 +57,7 @@ export const isValidDateString = (str: string) => {
   const date = new Date(str);
   return !Number.isNaN(date.getTime());
 };
+
+export const pick = <T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> => {
+  return Object.fromEntries(keys.map((key) => [key, obj[key]])) as Pick<T, K>;
+};

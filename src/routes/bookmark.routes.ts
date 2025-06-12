@@ -228,7 +228,7 @@ const insertTags = async (
   return tagsInserted;
 };
 
-const bookmarkPublicFields = {
+export const bookmarkPublicFields = {
   id: bookmark.publicId,
   title: bookmark.title,
   description: bookmark.description,

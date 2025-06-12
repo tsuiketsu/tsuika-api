@@ -1,20 +1,23 @@
 import { db } from "@/db";
-import { reminderInsertSehema } from "@/db/schema/reminder.schema";
+import { bookmark } from "@/db/schema/bookmark.schema";
+import { reminderInsertSchema } from "@/db/schema/reminder.schema";
 import { bookmarkReminder } from "@/db/schema/reminder.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
-import type { SuccessResponse } from "@/types";
+import type { PaginatedSuccessResponse, SuccessResponse } from "@/types";
 import {
   type ContentCategoryType,
   type Reminder,
   type ReminderType,
   contentCategoryTypes as cat,
+  contentCategoryTypes,
 } from "@/types/schema.types";
-import { getUserId } from "@/utils";
+import { getPagination, getUserId, pick } from "@/utils";
 import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();
 
@@ -37,16 +40,19 @@ const getContentRowId = async (
     throwError(
       "NOT_FOUND",
       `Bookmark with id ${publicId} not found`,
-      "remidners.bookmarks.get",
+      "reminders.bookmarks.get",
     );
   }
 
   return data.id;
 };
 
+const whereUserId = (userId: string) => eq(bookmarkReminder.userId, userId);
+const wherePublicId = (id: string) => eq(bookmarkReminder.publicId, id);
+
 const selectPublicFields = {
   id: bookmarkReminder.publicId,
-  message: bookmarkReminder.message,
+  note: bookmarkReminder.note,
   status: bookmarkReminder.status,
   priority: bookmarkReminder.priority,
   isDone: bookmarkReminder.isDone,
@@ -57,10 +63,19 @@ const selectPublicFields = {
   [key in keyof typeof bookmarkReminder]?: unknown;
 };
 
+export const contentPublicFields = {
+  bookmark: pick(bookmarkPublicFields, [
+    "title",
+    "description",
+    "url",
+    "faviconUrl",
+  ]),
+} satisfies Partial<Record<ContentCategoryType, unknown>>;
+
 // -----------------------------------------
 // INSERT REMINDER
 // -----------------------------------------
-const insertSchema = reminderInsertSehema.extend({
+const insertSchema = reminderInsertSchema.extend({
   type: z.enum(
     Object.values(cat) as [ContentCategoryType, ...ContentCategoryType[]],
   ),
@@ -69,7 +84,7 @@ const insertSchema = reminderInsertSehema.extend({
 router.post("/:id", zValidator("json", insertSchema), async (c) => {
   const {
     priority,
-    message,
+    note,
     remindDate: reminderDate,
     type,
   } = c.req.valid("json");
@@ -93,17 +108,17 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
 
   const data = await db
     .insert(bookmarkReminder)
-    .values({ publicId, userId, message, remindDate, priority, contentId })
+    .values({ publicId, userId, note, remindDate, priority, contentId })
     .returning(selectPublicFields);
 
   if (!data || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to add remidner", "reminders.post");
+    throwError("INTERNAL_ERROR", "Failed to add reminder", "reminders.post");
   }
 
   return c.json<SuccessResponse<Reminder>>(
     {
       success: true,
-      data: data[0],
+      data: { ...data[0], type },
       message: "Successfully added reminder",
     },
     200,
@@ -114,22 +129,85 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
 // GET ALL REMINDERS
 // -----------------------------------------
 router.get("/", async (c) => {
+  const { page, limit, offset } = getPagination(c.req.query());
   const userId = await getUserId(c);
 
   const data = await db
-    .select(selectPublicFields)
+    .select({
+      ...selectPublicFields,
+      content: contentPublicFields.bookmark,
+    })
     .from(bookmarkReminder)
-    .where(eq(bookmarkReminder.userId, userId));
+    .where(eq(bookmarkReminder.userId, userId))
+    .leftJoin(bookmark, eq(bookmark.id, bookmarkReminder.contentId))
+    .offset(offset)
+    .limit(limit);
 
   if (!data || data[0] == null) {
-    throwError("NOT_FOUND", "Reidners not found", "reminders.get");
+    throwError("NOT_FOUND", "Reminders not found", "reminders.get");
+  }
+
+  return c.json<PaginatedSuccessResponse<Reminder[]>>(
+    {
+      success: true,
+      message: "Successfully fetched reminders",
+      data: data.map((item) => ({
+        ...item,
+        type: contentCategoryTypes.BOOKMARK,
+      })),
+      pagination: {
+        page,
+        limit,
+        hasMore: data.length === limit,
+        total: data.length,
+      },
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
+// UPDATE REMINDER
+// -----------------------------------------
+router.put("/:id", zValidator("json", reminderInsertSchema), async (c) => {
+  const { note, remindDate: remindDateStr, priority } = c.req.valid("json");
+  const userId = await getUserId(c);
+
+  const publicId = c.req.param("id");
+
+  if (!publicId) {
+    throwError("REQUIRED_FIELD", "id is required", "reminders.put");
+  }
+
+  const remindDate = new Date(remindDateStr);
+
+  if (Number.isNaN(remindDate.getTime())) {
+    throwError(
+      "INVALID_PARAMETER",
+      "remindDate is a invalid date string",
+      "reminders.put",
+    );
+  }
+
+  const data = await db
+    .update(bookmarkReminder)
+    .set({ note, remindDate, priority })
+    .where(and(whereUserId(userId), wherePublicId(publicId)))
+    .returning(selectPublicFields);
+
+  if (!data || data[0] == null) {
+    throwError(
+      "INTERNAL_ERROR",
+      `Failed to update reminder with id "${publicId}"`,
+      "reminders.get",
+    );
   }
 
   return c.json<SuccessResponse<ReminderType>>(
     {
       success: true,
       data: data[0],
-      message: "Successfully fetched reminders",
+      message: "Successfully updated reminder",
     },
     200,
   );

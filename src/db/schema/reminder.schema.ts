@@ -27,7 +27,7 @@ export const bookmarkReminder = pgTable("bookmark_reminders", {
     .unique()
     .references(() => bookmark.id, { onDelete: "cascade" }),
   userId: referenceUser,
-  message: text(),
+  note: text(),
   status: status().default("pending"),
   priority: priority().default("normal"),
   isDone: boolean().notNull().default(false),
@@ -53,15 +53,15 @@ export const reminderSelectSchema = createSelectSchema(bookmarkReminder, {
   contentId: true,
 });
 
-export const reminderInsertSehema = createInsertSchema(bookmarkReminder, {
-  message: (z) => z.max(255),
+export const reminderInsertSchema = createInsertSchema(bookmarkReminder, {
+  note: (z) => z.max(255),
   remindDate: z
     .string()
     .refine((val) => !Number.isNaN(new Date(val).getTime()), {
       message: "Invalid date string",
     }),
 }).pick({
-  message: true,
+  note: true,
   priority: true,
   remindDate: true,
 });

@@ -19,7 +19,9 @@ export const bookmarkTagInsertSchema = z.object({
 export type FolderType = z.infer<typeof folderSelectSchema>;
 
 // Reminder Types
-export type Reminder = z.infer<typeof reminderSelectSchema>;
+export type Reminder = z.infer<typeof reminderSelectSchema> & {
+  type: ContentCategoryType;
+};
 
 export const contentCategoryTypes = {
   BOOKMARK: "bookmark",
