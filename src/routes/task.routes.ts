@@ -94,7 +94,8 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
   const remindAt = new Date(reminderDate);
 
   const taskRow = await db.query.bookmarkTask.findFirst({
-    where: (r, { and, eq }) => and(eq(r.userId, userId)),
+    where: (r, { and, eq }) =>
+      and(eq(r.userId, userId), eq(r.contentId, contentId)),
     columns: { id: true },
   });
 
