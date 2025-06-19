@@ -68,6 +68,7 @@ export const folderPublicFields = {
   description: folder.description,
   createdAt: folder.createdAt,
   updatedAt: folder.updatedAt,
+  keyDerivation: folder.keyDerivation,
 } as const;
 
 // -----------------------------------------
@@ -180,7 +181,21 @@ router.post(
   zValidator("json", folderInsertSchema),
   validateFolderName,
   async (c) => {
-    const { name, description } = c.req.valid("json");
+    const { name, description, keyDerivation } = c.req.valid("json");
+
+    if (keyDerivation) {
+      const missingFields = Object.entries(keyDerivation)
+        .filter(([, value]) => value.toString() === "")
+        .map(([key]) => key);
+
+      if (missingFields.length > 0) {
+        throwError(
+          "MISSING_PARAMETER",
+          `Missing: ${missingFields.join(", ")}`,
+          "folders.post",
+        );
+      }
+    }
 
     const userId = await getUserId(c);
 
@@ -206,6 +221,7 @@ router.post(
         userId,
         name: name.trim(),
         description: description?.trim(),
+        keyDerivation,
       })
       .returning(folderPublicFields);
 

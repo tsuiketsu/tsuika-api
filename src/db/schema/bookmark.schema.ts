@@ -30,6 +30,7 @@ export const bookmark = pgTable("bookmarks", {
   thumbnail: text("thumbnail"),
   thumbnailWidth: integer("thumbnail_width"),
   thumbnailHeight: integer("thumbnail_height"),
+  isEncrypted: boolean().default(false),
   isPinned: boolean().default(false),
   isFavourite: boolean().default(false),
   isArchived: boolean().default(false),

@@ -192,8 +192,12 @@ const getFilterCondition = (
     case "favorites":
       condition = orm.eq(bookmark.isFavourite, true);
       break;
+    case "encrypted":
+      condition = orm.eq(bookmark.isEncrypted, true);
+      break;
   }
 
+  // Encrypted
   return condition;
 };
 
@@ -268,6 +272,7 @@ export const bookmarkPublicFields = {
   thumbnailWidth: bookmark.thumbnailWidth,
   thumbnailHeight: bookmark.thumbnailHeight,
   isPinned: bookmark.isPinned,
+  isEncrypted: bookmark.isEncrypted,
   isFavourite: bookmark.isFavourite,
   isArchived: bookmark.isArchived,
   createdAt: bookmark.createdAt,
@@ -562,6 +567,7 @@ router.get("/folder/:id", async (c) => {
         ...(filterFlag !== "" && filterFlag !== "archived"
           ? [getFilterCondition(c.req.query())]
           : [
+              orm.eq(bookmark.isEncrypted, false),
               orm.eq(bookmark.isArchived, false),
               orm.eq(bookmark.isPinned, false),
             ]),
