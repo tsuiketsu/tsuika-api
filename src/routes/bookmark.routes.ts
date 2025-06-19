@@ -167,6 +167,36 @@ const getFolder = async (folderId: string | undefined, userId: string) => {
   return data;
 };
 
+const getFilterCondition = (
+  query: Record<string, string | undefined>,
+): orm.SQL<unknown> => {
+  const flags = ["pinned", "archived", "favorites", "unsorted"];
+
+  if (query?.filter && !flags.includes(query?.filter)) {
+    throwError(
+      "INVALID_PARAMETER",
+      `Invalid flag, expected [ ${flags.join(" | ")} ] but got ${query?.filter}`,
+      "bookmarks.get",
+    );
+  }
+
+  let condition: orm.SQL<unknown> = orm.isNotNull(bookmark.id);
+
+  switch (query?.filter) {
+    case "pinned":
+      condition = orm.eq(bookmark.isPinned, true);
+      break;
+    case "archived":
+      condition = orm.eq(bookmark.isArchived, true);
+      break;
+    case "favorites":
+      condition = orm.eq(bookmark.isFavourite, true);
+      break;
+  }
+
+  return condition;
+};
+
 const bookmarkJoins = {
   bookmarkFolder: {
     columns: { publicId: true },
@@ -332,22 +362,8 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 // GET TOTAL BOOKMARKS COUNT
 // -----------------------------------------
 router.get("/total-count", async (c) => {
+  const condition = getFilterCondition(c.req.query());
   const userId = await getUserId(c);
-  const filter = c.req.query("filter");
-
-  let condition: orm.SQL<unknown> | undefined;
-
-  switch (filter) {
-    case "pinned":
-      condition = orm.eq(bookmark.isPinned, true);
-      break;
-    case "archived":
-      condition = orm.eq(bookmark.isArchived, true);
-      break;
-    case "favorites":
-      condition = orm.eq(bookmark.isFavourite, true);
-      break;
-  }
 
   const data = await db
     .select({ count: orm.count() })
@@ -372,13 +388,15 @@ router.get("/total-count", async (c) => {
 // GET ALL BOOKMARKS
 // -----------------------------------------
 router.get("/", async (c) => {
-  const userId = await getUserId(c);
   const { page, limit, offset } = getPagination(c.req.query());
+  const condition = getFilterCondition(c.req.query());
 
   const orderBy = getOrderDirection(c.req.query(), "bookmarks.get");
 
+  const userId = await getUserId(c);
+
   const data = await db.query.bookmark.findMany({
-    where: orm.eq(bookmark.userId, userId),
+    where: (_, { and }) => and(whereUserId(userId), condition),
     with: bookmarkJoins,
     columns: { userId: false },
     orderBy: ({ updatedAt }, { desc, asc }) => {
@@ -537,9 +555,16 @@ router.get("/folder/:id", async (c) => {
         );
       }
 
+      const filterFlag = c.req.query("filter");
+
       condition = orm.and(
         orm.eq(bookmark.folderId, folderObj.id),
-        orm.eq(bookmark.isArchived, false),
+        ...(filterFlag !== "" && filterFlag !== "archived"
+          ? [getFilterCondition(c.req.query())]
+          : [
+              orm.eq(bookmark.isArchived, false),
+              orm.eq(bookmark.isPinned, false),
+            ]),
       );
     }
   }
@@ -559,17 +584,9 @@ router.get("/folder/:id", async (c) => {
   }
 
   const orderBy = getOrderDirection(c.req.query(), "folders.get");
-  const isPinned = c.req.query("isPinned");
 
   const data = await db.query.bookmark.findMany({
-    where: orm.and(
-      orm.eq(bookmark.userId, userId),
-      condition,
-      ...(typeof isPinned !== "undefined"
-        ? [orm.eq(bookmark.isPinned, isPinned === "true")]
-        : []),
-      queryCondition,
-    ),
+    where: orm.and(orm.eq(bookmark.userId, userId), condition, queryCondition),
     with: bookmarkJoins,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
