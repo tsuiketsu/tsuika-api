@@ -32,6 +32,7 @@ export const folderInsertSchema = createInsertSchema(folder)
   .extend({
     keyDerivation: z
       .object({
+        mac: z.string(),
         salt: z.string(),
         nonce: z.string(),
         kdf_algorithm: z.number(),
