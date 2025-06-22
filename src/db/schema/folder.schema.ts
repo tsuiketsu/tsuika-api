@@ -34,7 +34,6 @@ export const folderInsertSchema = createInsertSchema(folder)
       .object({
         mac: z.string(),
         salt: z.string(),
-        nonce: z.string(),
         kdf_algorithm: z.number(),
         kdf_opslimit: z.number(),
         kdf_memlimit: z.number(),

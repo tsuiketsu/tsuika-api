@@ -30,6 +30,7 @@ export const bookmark = pgTable("bookmarks", {
   thumbnail: text("thumbnail"),
   thumbnailWidth: integer("thumbnail_width"),
   thumbnailHeight: integer("thumbnail_height"),
+  nonce: text("nonce"),
   isEncrypted: boolean().default(false),
   isPinned: boolean().default(false),
   isFavourite: boolean().default(false),
@@ -73,6 +74,7 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   title: z.string().min(1, "Title is required").max(255).optional(),
   description: z.string().max(2000).optional(),
   url: z.string(),
+  nonce: z.string().optional(),
   faviconUrl: z.string().optional(),
   thumbnail: z.string().optional(),
 })
@@ -97,5 +99,11 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
           path: ["url"],
         });
       }
+    } else if (!data.nonce) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "nonce is required",
+        path: ["nonce"],
+      });
     }
   });

@@ -170,7 +170,7 @@ const getFolder = async (folderId: string | undefined, userId: string) => {
 const getFilterCondition = (
   query: Record<string, string | undefined>,
 ): orm.SQL<unknown> => {
-  const flags = ["pinned", "archived", "favorites", "unsorted"];
+  const flags = ["pinned", "archived", "favorites", "unsorted", "encrypted"];
 
   if (query?.filter && !flags.includes(query?.filter)) {
     throwError(
@@ -273,6 +273,7 @@ export const bookmarkPublicFields = {
   thumbnailHeight: bookmark.thumbnailHeight,
   isPinned: bookmark.isPinned,
   isEncrypted: bookmark.isEncrypted,
+  nonce: bookmark.nonce,
   isFavourite: bookmark.isFavourite,
   isArchived: bookmark.isArchived,
   createdAt: bookmark.createdAt,
@@ -292,6 +293,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
     url,
     tags,
     isEncrypted,
+    nonce,
   } = c.req.valid("json");
   console.log("Its not reaching here");
 
@@ -335,6 +337,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
         thumbnail,
         faviconUrl,
         isEncrypted: true,
+        nonce,
       }
     : {
         title: title || siteMeta?.data?.title || "Untitled",
@@ -737,7 +740,8 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   // Get previous bookmark id and url
   const prev = await getBookmarkById(c);
 
-  const { folderId, title, url, description, tags } = c.req.valid("json");
+  const { folderId, title, url, description, tags, nonce } =
+    c.req.valid("json");
 
   const folderData = await getFolder(folderId, userId);
 
