@@ -72,7 +72,7 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   folderId: z.string().optional(),
   title: z.string().min(1, "Title is required").max(255).optional(),
   description: z.string().max(2000).optional(),
-  url: z.string().url("Must be a valid URL"),
+  url: z.string(),
   faviconUrl: z.string().optional(),
   thumbnail: z.string().optional(),
 })
@@ -85,4 +85,17 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
           .extend({ id: z.string() }),
       )
       .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.isEncrypted) {
+      try {
+        new URL(data.url);
+      } catch (error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Must be a valid URL",
+          path: ["url"],
+        });
+      }
+    }
   });

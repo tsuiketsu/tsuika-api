@@ -283,10 +283,19 @@ export const bookmarkPublicFields = {
 // ADD NEW BOOKMARK
 // -----------------------------------------
 router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
-  const { folderId, title, url, tags } = c.req.valid("json");
+  const {
+    folderId,
+    title,
+    description,
+    thumbnail,
+    faviconUrl,
+    url,
+    tags,
+    isEncrypted,
+  } = c.req.valid("json");
   console.log("Its not reaching here");
 
-  if (!url) {
+  if (!isEncrypted && !url) {
     throwError("INVALID_PARAMETER", "Url is required", "bookmarks.post");
   }
 
@@ -298,20 +307,44 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
 
-  const siteMeta = await fetchLinkPreview(url);
+  let siteMeta: LinkPreviewResponsse | undefined = undefined;
 
-  if (!siteMeta.data) {
-    console.error(
-      `Fialed to fetch metadata of url ${url}`,
-      siteMeta.message || "",
-    );
+  if (!isEncrypted) {
+    siteMeta = await fetchLinkPreview(url);
+
+    if (!siteMeta.data) {
+      console.error(
+        `Fialed to fetch metadata of url ${url}`,
+        siteMeta.message || "",
+      );
+    }
   }
-  const image = siteMeta.data?.images?.[0];
+
+  const image = siteMeta?.data?.images?.[0];
   let imageMeta: Metadata | null = null;
 
   if (image && image.trim() !== "") {
     imageMeta = await getImageMedatata(image);
   }
+
+  const payload = isEncrypted
+    ? {
+        title: title || "Untitled",
+        description,
+        url,
+        thumbnail,
+        faviconUrl,
+        isEncrypted: true,
+      }
+    : {
+        title: title || siteMeta?.data?.title || "Untitled",
+        description: description || siteMeta?.data?.description,
+        url,
+        thumbnail: siteMeta?.data?.images?.[0],
+        faviconUrl: siteMeta?.data?.favicons?.[0] ?? getFavIcon(url),
+        thumbnailHeight: imageMeta?.height,
+        thumbnailWidth: imageMeta?.width,
+      };
 
   const data: (Omit<BookmarkType, "id" | "folderId"> & { id: number })[] =
     await db
@@ -320,13 +353,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
         publicId: generatePublicId(),
         folderId: folderData?.id,
         userId: userId,
-        title: title || siteMeta.data?.title || "Untitled",
-        description: siteMeta.data?.description || "",
-        url,
-        thumbnail: siteMeta.data?.images?.[0] ?? null,
-        faviconUrl: siteMeta.data?.favicons?.[0] ?? getFavIcon(url),
-        thumbnailHeight: imageMeta?.height,
-        thumbnailWidth: imageMeta?.width,
+        ...payload,
       })
       .returning();
 
@@ -401,7 +428,8 @@ router.get("/", async (c) => {
   const userId = await getUserId(c);
 
   const data = await db.query.bookmark.findMany({
-    where: (_, { and }) => and(whereUserId(userId), condition),
+    where: (b, { and, eq }) =>
+      and(whereUserId(userId), eq(b.isEncrypted, false), condition),
     with: bookmarkJoins,
     columns: { userId: false },
     orderBy: ({ updatedAt }, { desc, asc }) => {
