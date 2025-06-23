@@ -740,8 +740,17 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   // Get previous bookmark id and url
   const prev = await getBookmarkById(c);
 
-  const { folderId, title, url, description, tags, nonce } =
-    c.req.valid("json");
+  const {
+    folderId,
+    title,
+    url,
+    description,
+    tags,
+    isEncrypted,
+    thumbnail,
+    faviconUrl,
+    nonce,
+  } = c.req.valid("json");
 
   const folderData = await getFolder(folderId, userId);
 
@@ -769,19 +778,33 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   const newThumbnail = siteMeta?.data?.images?.[0];
 
+  const payload = isEncrypted
+    ? {
+        folderId: folderData?.id,
+        title,
+        description,
+        url,
+        faviconUrl,
+        thumbnail,
+        nonce,
+        updatedAt: orm.sql`NOW()`,
+      }
+    : {
+        folderId: folderData?.id,
+        title: title ?? (siteMeta?.data?.title || "Untitled"),
+        description: description ?? (siteMeta?.data?.description || ""),
+        url,
+        faviconUrl:
+          faviconUrl || (siteMeta?.data?.favicons?.[0] ?? getFavIcon(url)),
+        updatedAt: orm.sql`NOW()`,
+        thumbnailHeight: imageMeta?.height,
+        thumbnailWidth: imageMeta?.width,
+        ...(newThumbnail ? { thumbnail: newThumbnail } : {}),
+      };
+
   const data: Omit<BookmarkType, "folderId">[] = await db
     .update(bookmark)
-    .set({
-      folderId: folderData?.id,
-      title: title ?? (siteMeta?.data?.title || "Untitled"),
-      description: description ?? (siteMeta?.data?.description || ""),
-      url,
-      faviconUrl: siteMeta?.data?.favicons?.[0] ?? getFavIcon(url),
-      updatedAt: orm.sql`NOW()`,
-      thumbnailHeight: imageMeta?.height,
-      thumbnailWidth: imageMeta?.width,
-      ...(newThumbnail ? { thumbnail: newThumbnail } : {}),
-    })
+    .set(payload)
     .where(
       orm.and(orm.eq(bookmark.userId, userId), orm.eq(bookmark.id, prev.id)),
     )
