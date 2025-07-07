@@ -1,8 +1,9 @@
+import { RESERVED_USERNAMES } from "@/constants";
 import { throwError } from "@/errors/handlers";
 import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP, twoFactor } from "better-auth/plugins";
+import { emailOTP, twoFactor, username } from "better-auth/plugins";
 import { db } from "../db";
 import {
   account,
@@ -66,6 +67,11 @@ export const auth = betterAuth({
   },
   plugins: [
     twoFactor(),
+    username({
+      usernameValidator: (username) => {
+        return !RESERVED_USERNAMES.includes(username);
+      },
+    }),
     emailOTP({
       allowedAttempts: 5,
       async sendVerificationOTP({ email, otp, type }) {

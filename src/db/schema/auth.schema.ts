@@ -5,6 +5,8 @@ export const auth = pgSchema("auth");
 export const user = auth.table("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  username: text("username"),
+  displayUsername: text("display_username"),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified")
     .$defaultFn(() => false)
