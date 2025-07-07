@@ -6,3 +6,4 @@ export { default as tag } from "./tag.routes";
 export { default as bookmarkTag } from "./bookmark-tag.routes";
 export { default as folder } from "./folder.routes";
 export { default as task } from "./task.routes";
+export { default as sharedFolder } from "./shared-folder";

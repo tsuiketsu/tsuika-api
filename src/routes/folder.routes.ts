@@ -1,3 +1,4 @@
+import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { generatePublicId } from "@/utils/nanoid";
 import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
@@ -69,6 +70,10 @@ export const folderPublicFields = {
   createdAt: folder.createdAt,
   updatedAt: folder.updatedAt,
   keyDerivation: folder.keyDerivation,
+  isPublic: sharedFolder.isPublic,
+  publicId: sharedFolder.publicId,
+  expiresAt: sharedFolder.expiresAt,
+  viewCount: sharedFolder.viewCount,
 } as const;
 
 // -----------------------------------------
@@ -80,7 +85,13 @@ router.get("/all", async (c) => {
   const data = await db
     .select(folderPublicFields)
     .from(folder)
-    .where(whereUserId(userId));
+    .where(whereUserId(userId))
+    .leftJoin(
+      sharedFolder,
+      and(whereUserId(userId), eq(sharedFolder.folderId, folder.id)),
+    );
+
+  console.log(data);
 
   // const data = await db.select()
 
@@ -146,6 +157,10 @@ router.get("/", async (c) => {
     .select(folderPublicFields)
     .from(folder)
     .where(and(whereUserId(userId), condition))
+    .leftJoin(
+      sharedFolder,
+      and(whereUserId(userId), eq(sharedFolder.folderId, folder.id)),
+    )
     .limit(limit)
     .offset(offset);
 
