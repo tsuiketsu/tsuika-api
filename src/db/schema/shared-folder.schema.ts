@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   bigserial,
   boolean,
@@ -31,6 +32,19 @@ export const sharedFolder = pgTable("shared_folders", {
   ...timestamps,
 });
 
+export const sharedFolderRelations = relations(sharedFolder, ({ one }) => ({
+  author: one(user, {
+    fields: [sharedFolder.createdBy],
+    references: [user.id],
+  }),
+
+  folder: one(folder, {
+    fields: [sharedFolder.folderId],
+    references: [folder.id],
+  }),
+}));
+
+export const sharedFolderSelectSchema = createInsertSchema(sharedFolder);
 export const sharedFolderInsertSchema = createInsertSchema(sharedFolder, {
   folderId: z.string(),
 }).omit({ publicId: true, createdBy: true });

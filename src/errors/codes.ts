@@ -37,9 +37,17 @@ export const ERROR_DEFINITIONS = {
   },
 
   // FILE/DATA ERRORS
+  FORBIDDEN: {
+    code: "FORBIDDEN",
+    status: 403,
+  },
   NOT_FOUND: {
     code: "NOT_FOUND",
     status: 404,
+  },
+  GONE: {
+    code: "GONE",
+    status: 410,
   },
   TOO_LARGE: {
     code: "TOO_LARGE",

@@ -26,10 +26,11 @@ app.use("*", requireAuth);
 // Routes imports
 import * as allRoutes from "./routes";
 
-const { auth, authData, ...routes } = allRoutes;
+const { auth, authData, share, ...routes } = allRoutes;
 
 app.route("/api", auth);
 app.route("/api", authData);
+app.route("/api/public", share);
 
 for (const [key, value] of Object.entries(routes)) {
   app.basePath("/api/v1").route(`/${kebabCase(key)}s`, value);
