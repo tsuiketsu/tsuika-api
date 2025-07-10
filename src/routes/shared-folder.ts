@@ -127,4 +127,44 @@ router.get("/:publicId", async (c) => {
   );
 });
 
+// -----------------------------------------
+// UN-PUBLISH FOLDER
+// -----------------------------------------
+router.patch("/:publicId", async (c) => {
+  const publicId = c.req.param("publicId");
+  const userId = await getUserId(c);
+
+  const data = await db
+    .update(sf)
+    .set({
+      isPublic: false,
+      isLocked: false,
+      salt: null,
+      password: null,
+      expiresAt: null,
+      unpublishedAt: sql`NOW()`,
+    })
+    .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)))
+    .returning({
+      id: sf.publicId,
+    });
+
+  if (!data || data[0] == null) {
+    throwError(
+      "INTERNAL_ERROR",
+      "Failed to un-publish folder",
+      "shared-folders.patch",
+    );
+  }
+
+  return c.json<SuccessResponse<{ id: string }>>(
+    {
+      success: true,
+      data: data[0],
+      message: "Successfully unpublished folder",
+    },
+    200,
+  );
+});
+
 export default router;
