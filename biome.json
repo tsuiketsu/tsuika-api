@@ -22,7 +22,8 @@
     "rules": {
       "recommended": true,
       "complexity": { "useArrowFunction": "off", "useLiteralKeys": "off" },
-      "suspicious": { "noExplicitAny": "warn" }
+      "suspicious": { "noExplicitAny": "warn" },
+      "style": { "noNonNullAssertion": "off" }
     }
   },
   "javascript": {

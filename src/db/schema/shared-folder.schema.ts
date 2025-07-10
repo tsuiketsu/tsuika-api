@@ -7,7 +7,11 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+import {
+  createInsertSchema,
+  createSelectSchema,
+  createUpdateSchema,
+} from "drizzle-zod";
 import { z } from "zod";
 import { timestamps } from "../constants";
 import { user } from "./auth.schema";
@@ -24,6 +28,9 @@ export const sharedFolder = pgTable("shared_folders", {
     .references(() => user.id, { onDelete: "cascade" }),
   title: text(),
   note: text(),
+  isLocked: boolean(),
+  password: text(),
+  salt: text(),
   isPublic: boolean().notNull().default(true),
   viewCount: integer(),
   lastViewdAt: timestamp({ withTimezone: true }),
@@ -44,8 +51,15 @@ export const sharedFolderRelations = relations(sharedFolder, ({ one }) => ({
   }),
 }));
 
-export const sharedFolderSelectSchema = createInsertSchema(sharedFolder);
+export const sharedFolderSelectSchema = createSelectSchema(sharedFolder).omit({
+  id: true,
+  folderId: true,
+  createdBy: true,
+  password: true,
+  salt: true,
+});
 export const sharedFolderInsertSchema = createInsertSchema(sharedFolder, {
   folderId: z.string(),
+  password: z.string().optional(),
 }).omit({ publicId: true, createdBy: true });
-export const sharedFolderUpdateSchema = createInsertSchema(sharedFolder);
+export const sharedFolderUpdateSchema = createUpdateSchema(sharedFolder);

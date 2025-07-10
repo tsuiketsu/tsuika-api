@@ -71,6 +71,7 @@ export const folderPublicFields = {
   updatedAt: folder.updatedAt,
   keyDerivation: folder.keyDerivation,
   isPublic: sharedFolder.isPublic,
+  isLocked: sharedFolder.isLocked,
   publicId: sharedFolder.publicId,
   expiresAt: sharedFolder.expiresAt,
   viewCount: sharedFolder.viewCount,
