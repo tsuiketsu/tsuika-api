@@ -11,8 +11,23 @@ import { getUserId } from "@/utils";
 import { hashPassword } from "@/utils/crypto";
 import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
+import { and, eq, sql } from "drizzle-orm";
 
 const router = createRouter();
+
+const sharedFolderPublicFields = {
+  id: sf.publicId,
+  title: sf.title,
+  note: sf.note,
+  isLocked: sf.isLocked,
+  isPublic: sf.isPublic,
+  viewCount: sf.viewCount,
+  lastViewdAt: sf.lastViewdAt,
+  expiresAt: sf.expiresAt,
+  unpublishedAt: sf.unpublishedAt,
+  createdAt: sf.createdBy,
+  updatedAt: sf.updatedAt,
+};
 
 // -----------------------------------------
 // INSERT INTO SHARED-FOLDERS | SHARE FOLDER
@@ -75,6 +90,38 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
       success: true,
       data: data[0],
       message: "Successfully made folder public",
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
+// GET SHARED FOLDER INFO
+// -----------------------------------------
+router.get("/:publicId", async (c) => {
+  const source = "shared-folders.get";
+  const publicId = c.req.param("publicId");
+
+  if (!publicId) {
+    throwError("MISSING_PARAMETER", "publicId is missing", source);
+  }
+
+  const userId = await getUserId(c);
+
+  const data = await db
+    .select(sharedFolderPublicFields)
+    .from(sf)
+    .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)));
+
+  if (!data) {
+    throwError("INTERNAL_ERROR", "Failed to fetch shared-folder info", source);
+  }
+
+  return c.json<SuccessResponse<unknown>>(
+    {
+      success: true,
+      data: data[0],
+      message: "Successfully fetched shared-folder entry",
     },
     200,
   );
