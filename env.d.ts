@@ -8,5 +8,6 @@ declare namespace NodeJS {
     IMAGEKIT_PRIVATE_KEY: string;
     CORS_ORIGIN: string;
     RESEND_API_KEY: string;
+    JWT_SECRET: string;
   }
 }
