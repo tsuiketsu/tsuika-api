@@ -166,12 +166,14 @@ router.post("/folder/:publicId/unlock", async (c) => {
     throwError("UNAUTHORIZED", "Password is incorrect", source);
   }
 
-  const token = jwt.sign({ id: target.publicId }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: target.publicId }, process.env.JWT_SECRET, {
+    expiresIn: "60m",
+  });
 
   setCookie(c, `unlock_${target.publicId}`, token, {
     secure: true,
     httpOnly: true,
-    maxAge: 30 * 60 * 1000,
+    maxAge: 60 * 60 * 1000,
     sameSite: "Lax",
   });
 
