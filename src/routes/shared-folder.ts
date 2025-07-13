@@ -130,7 +130,7 @@ router.get("/:publicId", async (c) => {
 // -----------------------------------------
 // UN-PUBLISH FOLDER
 // -----------------------------------------
-router.patch("/:publicId", async (c) => {
+router.patch("/:publicId/unpublish", async (c) => {
   const publicId = c.req.param("publicId");
   const userId = await getUserId(c);
 
