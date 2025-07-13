@@ -6,8 +6,8 @@ import type { SuccessResponse } from "@/types";
 import { omit } from "@/utils";
 import { verifyHash } from "@/utils/crypto";
 import { eq } from "drizzle-orm";
-import { getCookie, setCookie } from "hono/cookie";
-import jwt, { type JwtPayload } from "jsonwebtoken";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import jwt from "jsonwebtoken";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();
@@ -178,6 +178,28 @@ router.post("/folder/:publicId/unlock", async (c) => {
   });
 
   return c.json({ success: true, message: "Folder unlocked!" }, 200);
+});
+
+// -----------------------------------------
+// LOCK SHARED FOLDER
+// -----------------------------------------
+router.post("/folder/:publicId/lock", async (c) => {
+  const publicId = c.req.param("publicId");
+
+  if (!publicId) {
+    throwError("REQUIRED_FIELD", "id is required", "share.folder.lock");
+  }
+
+  deleteCookie(c, `unlock_${publicId}`);
+
+  return c.json<SuccessResponse<null>>(
+    {
+      success: true,
+      data: null,
+      message: `Successfully locked folder with id ${publicId}`,
+    },
+    200,
+  );
 });
 
 export default router;
