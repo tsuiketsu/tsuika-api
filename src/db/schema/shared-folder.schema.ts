@@ -52,8 +52,24 @@ export const sharedFolderRelations = relations(sharedFolder, ({ one }) => ({
   }),
 }));
 
-export const sharedFolderSelectSchema = createSelectSchema(sharedFolder).omit({
-  id: true,
+// const sharedFolderPublicFields = {
+//   id: sf.publicId,
+//   title: sf.title,
+//   note: sf.note,
+//   isLocked: sf.isLocked,
+//   isPublic: sf.isPublic,
+//   viewCount: sf.viewCount,
+//   lastViewdAt: sf.lastViewdAt,
+//   expiresAt: sf.expiresAt,
+//   unpublishedAt: sf.unpublishedAt,
+//   createdAt: sf.createdBy,
+//   updatedAt: sf.updatedAt,
+// };
+
+export const sharedFolderSelectSchema = createSelectSchema(sharedFolder, {
+  id: z.string(),
+}).omit({
+  publicId: true,
   folderId: true,
   createdBy: true,
   password: true,

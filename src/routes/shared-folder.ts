@@ -2,6 +2,8 @@ import { db } from "@/db";
 import {
   sharedFolder as sf,
   sharedFolderInsertSchema,
+  type sharedFolderSelectSchema,
+  sharedFolderUpdateSchema,
 } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
@@ -12,6 +14,7 @@ import { hashPassword } from "@/utils/crypto";
 import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
 import { and, eq, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 const router = createRouter();
 
@@ -25,9 +28,29 @@ const sharedFolderPublicFields = {
   lastViewdAt: sf.lastViewdAt,
   expiresAt: sf.expiresAt,
   unpublishedAt: sf.unpublishedAt,
-  createdAt: sf.createdBy,
+  createdAt: sf.createdAt,
   updatedAt: sf.updatedAt,
 };
+
+async function getHashedPassword(
+  password: string,
+  source: string,
+): Promise<Record<"hash" | "salt", string>> {
+  const errorMsg = "Failed to generate password hash";
+
+  try {
+    const { salt, hash } = await hashPassword(password);
+
+    if (!salt || !hash) {
+      throwError("INTERNAL_ERROR", errorMsg, source);
+    }
+
+    return { hash, salt };
+  } catch (error) {
+    console.error("Error generating password hash:", error);
+    throwError("INTERNAL_ERROR", errorMsg, source);
+  }
+}
 
 // -----------------------------------------
 // INSERT INTO SHARED-FOLDERS | SHARE FOLDER
@@ -35,7 +58,7 @@ const sharedFolderPublicFields = {
 router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
   const source = "shared-folder.post";
 
-  const { folderId, title, note, isPublic, expiresAt, isLocked, password } =
+  const { folderId, title, note, expiresAt, isLocked, password } =
     c.req.valid("json");
 
   const userId = await getUserId(c);
@@ -45,20 +68,9 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
   let passwordSalt = null;
 
   if (password) {
-    const errorMsg = "Failed to generate password hash";
-    try {
-      const { salt, hash } = await hashPassword(password);
-
-      if (!salt || !hash) {
-        throwError("INTERNAL_ERROR", errorMsg, source);
-      }
-
-      passwordSalt = salt;
-      passwordHash = hash;
-    } catch (error) {
-      console.error("Error generating password hash:", error);
-      throwError("INTERNAL_ERROR", errorMsg, source);
-    }
+    const { hash, salt } = await getHashedPassword(password, source);
+    passwordHash = hash;
+    passwordSalt = salt;
   }
 
   const data = await db
@@ -87,6 +99,7 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
         note,
         isPublic: true,
         expiresAt,
+        updatedAt: sql`NOW()`,
       },
     })
     .returning(sharedFolderPublicFields);
@@ -104,6 +117,57 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
     200,
   );
 });
+
+// -----------------------------------------
+// UPDATE SHARED FOLDER
+// -----------------------------------------
+router.put(
+  "/:publicId",
+  zValidator("json", sharedFolderUpdateSchema),
+  async (c) => {
+    const source = "shared-folder.put";
+    const publicId = c.req.param("publicId");
+    const userId = await getUserId(c);
+
+    const { title, note, isLocked, password, expiresAt } = c.req.valid("json");
+
+    let passwordHash = null;
+    let passwordSalt = null;
+
+    if (password && isLocked) {
+      const { hash, salt } = await getHashedPassword(password, source);
+      passwordHash = hash;
+      passwordSalt = salt;
+    }
+
+    const result = await db
+      .update(sf)
+      .set({
+        title,
+        note,
+        isLocked,
+        expiresAt,
+        password: passwordHash,
+        salt: passwordSalt,
+        updatedAt: sql`NOW()`,
+      })
+      .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)))
+      .returning(sharedFolderPublicFields);
+
+    if (!result || result[0] == null) {
+      throwError("INTERNAL_ERROR", "Failed to update folder", source);
+    }
+
+    return c.json<SuccessResponse<z.infer<typeof sharedFolderSelectSchema>>>(
+      {
+        success: true,
+        message: "Successfully updated shared-folder",
+        data: result[0],
+      },
+      200,
+    );
+  },
+);
 
 // -----------------------------------------
 // GET SHARED FOLDER INFO
