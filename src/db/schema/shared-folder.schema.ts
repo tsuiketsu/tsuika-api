@@ -21,6 +21,7 @@ export const sharedFolder = pgTable("shared_folders", {
   id: bigserial({ mode: "number" }).primaryKey(),
   publicId: text().unique().notNull(),
   folderId: integer()
+    .unique()
     .notNull()
     .references(() => folder.id, { onDelete: "cascade" }),
   createdBy: text()
