@@ -69,23 +69,33 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
       createdBy: userId,
       password: passwordHash,
       salt: passwordSalt,
-      unpublishedAt: null, // handles re-publish
       isLocked,
       title,
       note,
-      isPublic,
+      isPublic: true,
       expiresAt,
     })
-    .returning({
-      isPublic: sf.isPublic,
-      publicId: sf.publicId,
-    });
+    .onConflictDoUpdate({
+      target: sf.folderId,
+      where: and(eq(sf.createdBy, userId), eq(sf.folderId, folderNumericId)),
+      set: {
+        password: passwordHash,
+        salt: passwordSalt,
+        unpublishedAt: null,
+        isLocked,
+        title,
+        note,
+        isPublic: true,
+        expiresAt,
+      },
+    })
+    .returning(sharedFolderPublicFields);
 
   if (!data || data.length === 0 || data[0] == null) {
     throwError("INTERNAL_ERROR", "Failed to make folder public", source);
   }
 
-  return c.json<SuccessResponse<{ isPublic: boolean; publicId: string }>>(
+  return c.json<SuccessResponse<unknown>>(
     {
       success: true,
       data: data[0],
@@ -138,9 +148,6 @@ router.patch("/:publicId/unpublish", async (c) => {
     .update(sf)
     .set({
       isPublic: false,
-      isLocked: false,
-      salt: null,
-      password: null,
       expiresAt: null,
       unpublishedAt: sql`NOW()`,
     })
