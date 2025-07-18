@@ -1,9 +1,9 @@
-import { RESERVED_USERNAMES } from "@/constants";
-import { throwError } from "@/errors/handlers";
-import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, twoFactor, username } from "better-auth/plugins";
+import { RESERVED_USERNAMES } from "@/constants";
+import { throwError } from "@/errors/handlers";
+import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
 import { db } from "../db";
 import {
   account,
@@ -25,7 +25,10 @@ export const auth = betterAuth({
     },
     usePlural: true,
   }),
-  trustedOrigins: [process.env.CORS_ORIGIN],
+  trustedOrigins: [
+    process.env.CORS_ORIGIN_FRONTEND,
+    process.env.CORS_ORIGIN_BROWSER_EXTENSION,
+  ],
   session: {
     cookieCache: {
       enabled: true,

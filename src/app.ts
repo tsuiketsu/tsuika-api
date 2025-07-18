@@ -13,7 +13,10 @@ app.use("*", addSession);
 app.use(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: [
+      process.env.CORS_ORIGIN_FRONTEND,
+      process.env.CORS_ORIGIN_BROWSER_EXTENSION,
+    ],
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "PUT", "PATCH", "OPTIONS", "DELETE"],
     exposeHeaders: ["Content-Length"],
