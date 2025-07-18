@@ -1,23 +1,25 @@
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db";
 import { bookmark } from "@/db/schema/bookmark.schema";
-import { bookmarkTaskInsertSchema } from "@/db/schema/task.schema";
-import { bookmarkTask } from "@/db/schema/task.schema";
+import {
+  bookmarkTask,
+  bookmarkTaskInsertSchema,
+} from "@/db/schema/task.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "@/types";
 import {
   type ContentCategoryType,
+  contentCategoryTypes as cat,
+  contentCategoryTypes,
   type Task,
   TaskStatus,
   type TaskType,
-  contentCategoryTypes as cat,
-  contentCategoryTypes,
 } from "@/types/schema.types";
 import { getPagination, getUserId, pick } from "@/utils";
 import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
-import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();

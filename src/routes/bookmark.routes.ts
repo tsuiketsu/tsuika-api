@@ -1,20 +1,20 @@
+import * as orm from "drizzle-orm";
+import type { Context } from "hono";
+import type { Metadata } from "sharp";
+import { z } from "zod";
 import { throwError } from "@/errors/handlers";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
-import * as orm from "drizzle-orm";
-import type { Context } from "hono";
-import type { Metadata } from "sharp";
-import { z } from "zod";
 import { db } from "../db";
-import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import {
   bookmark,
   bookmarkInsertSchema,
   bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
+import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { folder } from "../db/schema/folder.schema";
 import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
@@ -309,7 +309,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
 
-  let siteMeta: LinkPreviewResponsse | undefined = undefined;
+  let siteMeta: LinkPreviewResponsse | undefined;
 
   if (!isEncrypted) {
     siteMeta = await fetchLinkPreview(url);
@@ -611,7 +611,7 @@ router.get("/folder/:id", async (c) => {
   // Add optional bookmark query by title or url
   const bookmarkQuery = c.req.query("query");
 
-  let queryCondition: orm.SQL<unknown> | undefined = undefined;
+  let queryCondition: orm.SQL<unknown> | undefined;
 
   if (bookmarkQuery && bookmarkQuery.trim() !== "") {
     queryCondition = orm.or(

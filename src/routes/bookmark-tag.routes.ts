@@ -1,5 +1,5 @@
-import { throwError } from "@/errors/handlers";
 import { and, eq, inArray } from "drizzle-orm";
+import { throwError } from "@/errors/handlers";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { createRouter } from "../lib/create-app";

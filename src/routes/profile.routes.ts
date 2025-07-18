@@ -1,8 +1,8 @@
+import { eq, sql } from "drizzle-orm";
 import { throwError } from "@/errors/handlers";
 import type { ProfileType } from "@/types/schema.types";
 import { getUserId } from "@/utils";
 import { zValidator } from "@/utils/validator-wrapper";
-import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   profile,

@@ -1,11 +1,10 @@
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { Context } from "hono";
 import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { generatePublicId } from "@/utils/nanoid";
-import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
-import type { Context } from "hono";
 import { db } from "../db";
-import { folder } from "../db/schema/folder.schema";
-import { folderInsertSchema } from "../db/schema/folder.schema";
+import { folder, folderInsertSchema } from "../db/schema/folder.schema";
 import { createRouter } from "../lib/create-app";
 import createFieldValidator from "../middlewares/validate-name.middleware";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";

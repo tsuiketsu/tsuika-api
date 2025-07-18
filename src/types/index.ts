@@ -3,7 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 export type SuccessResponse<T = void> = {
   success: true;
   message: string;
-  // biome-ignore lint/complexity/noBannedTypes:
+  // biome-ignore lint/complexity/noBannedTypes: false
 } & (T extends void ? {} : { data: T });
 
 export interface Pagination {

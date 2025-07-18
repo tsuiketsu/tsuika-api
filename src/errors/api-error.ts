@@ -1,6 +1,6 @@
-import type { ErrorCodeKey } from "@/errors/types";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ErrorCodeKey } from "@/errors/types";
 
 class ApiError extends HTTPException {
   constructor(

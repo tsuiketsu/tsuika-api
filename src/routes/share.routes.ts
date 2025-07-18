@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import jwt from "jsonwebtoken";
 import { db } from "@/db";
 import { bookmark } from "@/db/schema/bookmark.schema";
 import { throwError } from "@/errors/handlers";
@@ -5,9 +8,6 @@ import { createRouter } from "@/lib/create-app";
 import type { SuccessResponse } from "@/types";
 import { omit } from "@/utils";
 import { verifyHash } from "@/utils/crypto";
-import { eq } from "drizzle-orm";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import jwt from "jsonwebtoken";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();

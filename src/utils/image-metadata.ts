@@ -14,7 +14,7 @@ export const getImageMedatata = async (
     const buffer = Buffer.from(arrayBuffer);
 
     return await sharp(buffer).metadata();
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: false
   } catch (error: any) {
     console.error("Failed to parse image metadata", error.message);
     return null;

@@ -1,7 +1,7 @@
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
-import { and, eq } from "drizzle-orm";
 
 // Get folder row's id (primary key)
 export const getFolderId = async (userId: string, publicId: string) => {

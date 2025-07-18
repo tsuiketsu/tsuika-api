@@ -1,9 +1,9 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import * as authSchema from "./schema/auth.schema";
-import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
 import * as bookmarkTasks from "./schema/bookmark.schema";
+import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
 import * as folderSchema from "./schema/folder.schema";
 import * as profileSchema from "./schema/profile.schema";
 import * as sharedFolderSchema from "./schema/shared-folder.schema";

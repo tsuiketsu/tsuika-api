@@ -55,7 +55,7 @@ export const uploadOnImageKit = async (
       url: response.url,
       fileId: response.fileId,
     };
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: false
   } catch (error: any) {
     return {
       status: 502,
@@ -75,7 +75,7 @@ export const deleteFromImageKit = async (fileId: string) => {
     if (response) {
       console.log("Successfully deleted file from ImageKit");
     }
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: false
   } catch (error: any) {
     console.error(error.message || "Failed to delete file from ImageKit");
   }

@@ -1,5 +1,5 @@
-import { throwError } from "@/errors/handlers";
 import type { Context, Next } from "hono";
+import { throwError } from "@/errors/handlers";
 
 const ignoreList = ["/api/auth", "/api/verification-email", "/api/public"];
 

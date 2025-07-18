@@ -1,6 +1,6 @@
 import * as dns from "node:dns";
-import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getLinkPreview } from "link-preview-js";
+import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 
 export const fetchLinkPreview = async (
   websiteUrl: string,
