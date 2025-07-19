@@ -423,30 +423,83 @@ router.get("/total-count", async (c) => {
 // GET ALL BOOKMARKS
 // -----------------------------------------
 router.get("/", async (c) => {
-  const { page, limit, offset } = getPagination(c.req.query());
-  const condition = getFilterCondition(c.req.query());
-
-  const orderBy = getOrderDirection(c.req.query(), "bookmarks.get");
-
+  const source = "bookmarks.get";
+  const queryUrl = c.req.query("url");
   const userId = await getUserId(c);
 
+  // Fetch bookmarks by url if query param given
+
+  if (queryUrl && queryUrl.trim() !== "") {
+    const data = await db.query.bookmark.findFirst({
+      where: orm.and(
+        orm.eq(bookmark.userId, userId),
+        orm.ilike(bookmark.url, `%${queryUrl}%`),
+      ),
+      with: bookmarkJoins,
+    });
+
+    if (!data) {
+      const errMsg = `Bookmark with url "${queryUrl}" not found`;
+      throwError("NOT_FOUND", errMsg, source);
+    }
+
+    const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
+      ...tag,
+      appliedAt,
+    }));
+
+    const updatedData = {
+      ...data,
+      tags,
+    };
+
+    const { bookmarkFolder, publicId, ...rest } = updatedData;
+
+    return c.json<SuccessResponse<BookmarkType>>(
+      {
+        success: true,
+        data: {
+          ...rest,
+          id: publicId,
+          folderId: bookmarkFolder?.publicId,
+          tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
+        },
+        message: `Successfully fetched bookmark with url ${queryUrl}`,
+      },
+      200,
+    );
+  }
+
+  // Fetch all bookmarks with pagination if `url` param not found
+  const condition = getFilterCondition(c.req.query());
+  const orderBy = getOrderDirection(c.req.query(), "bookmarks.get");
+
+  // Gets pagination query parameters
+  const { page, limit, offset } = getPagination(c.req.query());
+
   const data = await db.query.bookmark.findMany({
-    where: (b, { and, eq }) =>
-      and(whereUserId(userId), eq(b.isEncrypted, false), condition),
     with: bookmarkJoins,
-    columns: { userId: false },
-    orderBy: ({ updatedAt }, { desc, asc }) => {
+    where: orm.and(
+      whereUserId(userId),
+      orm.eq(bookmark.isEncrypted, false),
+      condition,
+    ),
+    orderBy: () => {
       if (orderBy) {
-        return orderBy === "desc" ? desc(updatedAt) : asc(updatedAt);
+        return orderBy === "desc"
+          ? orm.desc(bookmark.updatedAt)
+          : orm.asc(bookmark.updatedAt);
       }
-      return desc(updatedAt);
+
+      return orm.desc(bookmark.updatedAt);
     },
+    columns: { userId: false },
     limit,
     offset,
   });
 
   if (data.length === 0) {
-    throwError("NOT_FOUND", "No bookmarks found", "bookmarks.get");
+    throwError("NOT_FOUND", "No bookmarks found", source);
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
@@ -672,12 +725,8 @@ router.get("/folder/:id", async (c) => {
 // -----------------------------------------
 // GET BOOKMARK BY ID
 // -----------------------------------------
-router.get(":id", async (c) => {
-  const userId = c.get("user")?.id;
-
-  if (!userId) {
-    throwError("UNAUTHORIZED", "Unauthorized access detected", "bookmarks.get");
-  }
+router.get("/", async (c) => {
+  const userId = await getUserId(c);
 
   const bookmarkId = await getBookmarkId(c);
 
@@ -708,13 +757,7 @@ router.get(":id", async (c) => {
     tags,
   };
 
-  const {
-    userId: omitThis,
-    bookmarkFolder,
-    bookmarkTag,
-    publicId,
-    ...rest
-  } = updatedData;
+  const { bookmarkFolder, publicId, ...rest } = updatedData;
 
   return c.json<SuccessResponse<BookmarkType>>(
     {
