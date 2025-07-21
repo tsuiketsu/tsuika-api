@@ -76,7 +76,7 @@ router.get("/user", async (c) => {
 
   return c.json<SuccessResponse<unknown>>({
     success: true,
-    data: response,
+    data: { ...response, image: response.image?.split("|")[1] },
     message: "Successfully fetched profile",
   });
 });
@@ -89,8 +89,6 @@ router.patch("/user", async (c) => {
   const userId = await getUserId(c);
 
   const { name, username, image } = await c.req.parseBody();
-
-  console.log(image, typeof image);
 
   // IMPORTANT: Check for username existence
 
@@ -128,8 +126,8 @@ router.patch("/user", async (c) => {
     RETURNING 
       auth.users.name as name,
       auth.users.username as username,
-      SPLIT_PART(auth.users.image, '|', 2) as image_url,
-      SPLIT_PART(old_data.image, '|', 1) as old_image_id;
+      auth.users.image as image_url,
+      old_data.image as old_image_url
   `);
 
   if (!response || response.rows[0] == null) {
@@ -138,15 +136,20 @@ router.patch("/user", async (c) => {
 
   // Cleanup old image
 
-  const oldImageId = response.rows[0]["old_image_id"] as string;
+  const newImageUri = response.rows[0]["image_url"] as string;
+  const oldImageUri = response.rows[0]["old_image_url"] as string;
 
-  if (oldImageId) {
-    await deleteFromImageKit(oldImageId);
+  if (oldImageUri && oldImageUri !== newImageUri) {
+    const fileId = oldImageUri.split("|")[0];
+    fileId && (await deleteFromImageKit(fileId));
   }
 
   return c.json<SuccessResponse<unknown>>({
     success: true,
-    data: response.rows[0],
+    data: {
+      ...response.rows[0],
+      image: newImageUri.split("|")[1],
+    },
     message: "Successfully updated profile",
   });
 });
