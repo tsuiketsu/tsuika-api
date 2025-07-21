@@ -1,6 +1,11 @@
 export const DEFAULT_QUERY_LIMIT = 10;
 export const MAX_QUERY_LIMIT = 100;
 export const INVALID_CHARS = /[/\\?%*:|"<>.]/;
+export const trustedOrigins = [
+  process.env.CORS_ORIGIN_FRONTEND,
+  process.env.CORS_ORIGIN_BROWSER_EXTENSION,
+  process.env.CORS_ORIGIN_HOPPSCOTCH,
+];
 export const RESERVED_USERNAMES = [
   // 🔒 Admin/System Roles
   "admin",

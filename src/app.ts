@@ -1,4 +1,5 @@
 import { cors } from "hono/cors";
+import { csrf } from "hono/csrf";
 import { logger } from "hono/logger";
 import kebabCase from "lodash.kebabcase";
 import createApp from "./lib/create-app";
@@ -10,13 +11,11 @@ const app = createApp();
 // Middlewares
 app.use(logger());
 app.use("*", addSession);
+app.use(csrf({ origin: trustedOrigins }));
 app.use(
   "*",
   cors({
-    origin: [
-      process.env.CORS_ORIGIN_FRONTEND,
-      process.env.CORS_ORIGIN_BROWSER_EXTENSION,
-    ],
+    origin: trustedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "PUT", "PATCH", "OPTIONS", "DELETE"],
     exposeHeaders: ["Content-Length"],
@@ -26,6 +25,7 @@ app.use(
 );
 app.use("*", requireAuth);
 
+import { trustedOrigins } from "./constants";
 // Routes imports
 import * as allRoutes from "./routes";
 

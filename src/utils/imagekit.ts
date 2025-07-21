@@ -1,5 +1,7 @@
 import ImageKit from "imagekit";
+import { customAlphabet } from "nanoid";
 import type { ImageKitReponse } from "../types";
+import { alphabet } from "./nanoid";
 
 const imageKit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
@@ -40,11 +42,11 @@ export const uploadOnImageKit = async (
 
     const bytes = await localFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const nanoid = customAlphabet(alphabet, 8);
 
     const response = await imageKit.upload({
       file: buffer,
-      fileName: `${localFile.name}-${uniqueSuffix}`,
+      fileName: `${nanoid()}.${localFile.type.split("/").slice(-1)[0]}`,
       folder: "tsuika",
       isPublished: true,
     });

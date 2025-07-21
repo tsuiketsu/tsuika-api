@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, twoFactor, username } from "better-auth/plugins";
-import { RESERVED_USERNAMES } from "@/constants";
+import { RESERVED_USERNAMES, trustedOrigins } from "@/constants";
 import { throwError } from "@/errors/handlers";
 import { sendEmailVerificationLink, sendOTP } from "@/helpers/send-email";
 import { db } from "../db";
@@ -25,10 +25,7 @@ export const auth = betterAuth({
     },
     usePlural: true,
   }),
-  trustedOrigins: [
-    process.env.CORS_ORIGIN_FRONTEND,
-    process.env.CORS_ORIGIN_BROWSER_EXTENSION,
-  ],
+  trustedOrigins,
   session: {
     cookieCache: {
       enabled: true,

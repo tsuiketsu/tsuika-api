@@ -7,6 +7,7 @@ export const user = auth.table("users", {
   name: text("name").notNull(),
   username: text("username"),
   displayUsername: text("display_username"),
+  image: text("image"),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified")
     .$defaultFn(() => false)
