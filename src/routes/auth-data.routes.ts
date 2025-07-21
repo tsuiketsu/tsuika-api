@@ -58,8 +58,8 @@ router.get("/verification-email/:id", async (c) => {
 // -----------------------------------------
 // UPDATE NAME, USERNAME, IMAGE
 // -----------------------------------------
-router.patch("/user/update", async (c) => {
-  const source = "user.update.put";
+router.patch("/user", async (c) => {
+  const source = "users.put";
   const userId = await getUserId(c);
 
   const { name, username, image } = await c.req.parseBody();
