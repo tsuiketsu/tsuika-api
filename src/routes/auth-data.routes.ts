@@ -56,6 +56,32 @@ router.get("/verification-email/:id", async (c) => {
 });
 
 // -----------------------------------------
+// GET USER PROFILE
+// -----------------------------------------
+router.get("/user", async (c) => {
+  const userId = await getUserId(c);
+
+  const response = await db.query.user.findFirst({
+    where: eq(user.id, userId),
+    columns: {
+      name: true,
+      username: true,
+      image: true,
+    },
+  });
+
+  if (!response) {
+    throwError("INTERNAL_ERROR", "Profile not found", "users.get");
+  }
+
+  return c.json<SuccessResponse<unknown>>({
+    success: true,
+    data: response,
+    message: "Successfully fetched profile",
+  });
+});
+
+// -----------------------------------------
 // UPDATE NAME, USERNAME, IMAGE
 // -----------------------------------------
 router.patch("/user", async (c) => {
