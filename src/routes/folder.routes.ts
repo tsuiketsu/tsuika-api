@@ -9,7 +9,7 @@ import { createRouter } from "../lib/create-app";
 import createFieldValidator from "../middlewares/validate-name.middleware";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { FolderType } from "../types/schema.types";
-import { getPagination, getUserId } from "../utils";
+import { getPagination, getUserId, pick } from "../utils";
 import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
@@ -69,11 +69,17 @@ export const folderPublicFields = {
   createdAt: folder.createdAt,
   updatedAt: folder.updatedAt,
   keyDerivation: folder.keyDerivation,
-  isPublic: sharedFolder.isPublic,
-  isLocked: sharedFolder.isLocked,
-  publicId: sharedFolder.publicId,
-  expiresAt: sharedFolder.expiresAt,
-  viewCount: sharedFolder.viewCount,
+} as const;
+
+export const folderSelectPublicFields = {
+  ...folderPublicFields,
+  ...pick(sharedFolder, [
+    "isPublic",
+    "isLocked",
+    "publicId",
+    "expiresAt",
+    "viewCount",
+  ]),
 } as const;
 
 // -----------------------------------------
@@ -83,7 +89,7 @@ router.get("/all", async (c) => {
   const userId = await getUserId(c);
 
   const data = await db
-    .select(folderPublicFields)
+    .select(folderSelectPublicFields)
     .from(folder)
     .where(whereUserId(userId))
     .leftJoin(
@@ -154,7 +160,7 @@ router.get("/", async (c) => {
   }
 
   const data = await db
-    .select(folderPublicFields)
+    .select(folderSelectPublicFields)
     .from(folder)
     .where(and(whereUserId(userId), condition))
     .leftJoin(
