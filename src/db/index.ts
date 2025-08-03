@@ -4,6 +4,7 @@ import * as authSchema from "./schema/auth.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
 import * as bookmarkTasks from "./schema/bookmark.schema";
 import * as bookmarkTagSchema from "./schema/bookmark-tag.schema";
+import * as collabFolderSchema from "./schema/collab-folder.schema";
 import * as folderSchema from "./schema/folder.schema";
 import * as profileSchema from "./schema/profile.schema";
 import * as sharedFolderSchema from "./schema/shared-folder.schema";
@@ -44,6 +45,7 @@ export const db = drizzleHttp({
     ...taskSchema,
     ...bookmarkTasks,
     ...sharedFolderSchema,
+    ...collabFolderSchema,
   },
   client: sql,
   casing: "snake_case",
