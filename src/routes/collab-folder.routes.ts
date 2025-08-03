@@ -1,4 +1,4 @@
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { user } from "@/db/schema/auth.schema";
@@ -14,25 +14,37 @@ import { zValidator } from "@/utils/validator-wrapper";
 
 const router = createRouter();
 
+// Gets user by either username or email
+const getUserByIdentifier = async (identifier: string) => {
+  return await db.query.user.findFirst({
+    where: (user, { or, eq }) => {
+      return or(eq(user.username, identifier), eq(user.email, identifier));
+    },
+    columns: {
+      id: true,
+      username: true,
+      email: true,
+      image: true,
+    },
+  });
+};
+
+// -----------------------------------------
+// INSERT USER INTO COLLAB-FOLDERS TABLE
+// -----------------------------------------
 const insertSchema = z.object({
   identifier: z.string(),
   folderPublicId: z.string(),
   permissionLevel: z.enum(["viewer", "editor", "admin"]),
 });
 
-// -----------------------------------------
-// INSERT USER INTO COLLAB-FOLDERS TABLE
-// -----------------------------------------
 router.post("/", zValidator("json", insertSchema), async (c) => {
   const source = "collab-folders.post";
 
   const { folderPublicId, identifier, permissionLevel } = c.req.valid("json");
 
   // Check and get user id the folder to be collaborated with
-  const sharedWithUser = await db.query.user.findFirst({
-    where: or(eq(user.username, identifier), eq(user.email, identifier)),
-    columns: { id: true, username: true, email: true, image: true },
-  });
+  const sharedWithUser = await getUserByIdentifier(identifier);
 
   if (!sharedWithUser || !sharedWithUser.id) {
     throwError("NOT_FOUND", "User not found", source);
@@ -116,5 +128,62 @@ router.get("/:folderPublicId", async (c) => {
     })),
   });
 });
+
+// -----------------------------------------
+// CHANGE MEMBER'S PERMISSION LEVEL
+// -----------------------------------------
+router.patch(
+  "/:folderPublicId",
+  zValidator("json", insertSchema.omit({ folderPublicId: true })),
+  async (c) => {
+    const source = "collab-folders.patch";
+    const { identifier, permissionLevel } = c.req.valid("json");
+
+    const member = await getUserByIdentifier(identifier);
+
+    if (!member) {
+      throwError("NOT_FOUND", "User not found", source);
+    }
+
+    const selectedFolder = await db.query.folder.findFirst({
+      where: eq(folder.publicId, c.req.param("folderPublicId")),
+      columns: { id: true },
+    });
+
+    if (!selectedFolder) {
+      throwError("NOT_FOUND", "Folder not found", source);
+    }
+
+    const matchCondition = and(
+      eq(cFolder.folderId, selectedFolder.id),
+      eq(cFolder.sharedWithUserId, member.id),
+    );
+
+    const payload = {
+      permissionLevel,
+      updatedAt: sql`NOW(
+      )`,
+    };
+
+    const response = await db
+      .update(cFolder)
+      .set(payload)
+      .where(matchCondition)
+      .returning({
+        id: cFolder.publicId,
+        permissionLevel: cFolder.permissionLevel,
+      });
+
+    if (!response || response[0] == null) {
+      throwError("INTERNAL_ERROR", "Failed to update permission level", source);
+    }
+
+    return c.json<SuccessResponse<unknown>>({
+      success: true,
+      message: `Permission level updated: now set to '${permissionLevel}'`,
+      data: response[0],
+    });
+  },
+);
 
 export default router;
