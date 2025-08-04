@@ -99,24 +99,6 @@ export const getBookmarkId = async (c: Context) => {
   return id;
 };
 
-// Get folder row's id (primary key)
-const getFolderId = async (userId: string, publicId: string) => {
-  const data = await db.query.folder.findFirst({
-    where: orm.and(whereUserId(userId), orm.eq(folder.publicId, publicId)),
-    columns: { id: true },
-  });
-
-  if (!data) {
-    throwError(
-      "NOT_FOUND",
-      `Folder with id ${publicId} no found`,
-      "bookmarks.folders.get",
-    );
-  }
-
-  return data.id;
-};
-
 const setBookmarkFlag = async (
   c: Context,
   field: "isPinned" | "isArchived" | "isFavourite",
@@ -147,25 +129,36 @@ const setBookmarkFlag = async (
   );
 };
 
-const getFolder = async (folderId: string | undefined, userId: string) => {
-  let data: { id: number } | undefined;
+const getFolderId = async (folderId: string | undefined, userId: string) => {
+  const source = "bookmarks.folders.get";
 
-  if (folderId) {
-    data = await db.query.folder.findFirst({
-      where: orm.and(whereUserId(userId), orm.eq(folder.publicId, folderId)),
-      columns: { id: true },
-    });
+  if (!folderId) return;
 
-    if (!data?.id) {
-      throwError(
-        "NOT_FOUND",
-        `Failed to get folder by id ${folderId}`,
-        "bookmarks.folders.get",
-      );
-    }
+  const isFolderSharedWithUser = orm.and(
+    orm.eq(folder.id, collabFolder.folderId),
+    orm.eq(collabFolder.sharedWithUserId, userId),
+  );
+
+  // Check folder accibility by userId and if shared with
+  const isAccessibleFolderByUser = orm.and(
+    orm.or(
+      orm.eq(folder.userId, userId),
+      orm.eq(collabFolder.sharedWithUserId, userId),
+    ),
+    orm.eq(folder.publicId, folderId),
+  );
+
+  const data = await db
+    .select({ id: folder.id })
+    .from(folder)
+    .leftJoin(collabFolder, isFolderSharedWithUser)
+    .where(isAccessibleFolderByUser);
+
+  if (!data || data[0] == null || !data[0]?.id) {
+    throwError("NOT_FOUND", `Failed to get folder by id ${folderId}`, source);
   }
 
-  return data;
+  return data[0].id;
 };
 
 const getFilterCondition = (
@@ -304,7 +297,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   const userId = await getUserId(c);
 
-  const folderData = await getFolder(folderId, userId);
+  const folderRowId = await getFolderId(folderId, userId);
 
   // NOTE: Whole thing is not very robust, db.transaction is better choice
   // but that doesn't work with neon-http, also db.batch which is not
@@ -355,7 +348,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
       .insert(bookmark)
       .values({
         publicId: generatePublicId(),
-        folderId: folderData?.id,
+        folderId: folderRowId,
         userId: userId,
         ...payload,
       })
@@ -607,6 +600,7 @@ router.get("/tag/:publicId", async (c) => {
 router.get("/folder/:id", async (c) => {
   const userId = await getUserId(c);
   const folderId = c.req.param("id");
+  const source = "bookmarks.get";
 
   if (!folderId || folderId.trim() === "") {
     throwError("INVALID_PARAMETER", "Invalid folder name", "bookmarks.get");
@@ -627,39 +621,16 @@ router.get("/folder/:id", async (c) => {
       condition = orm.isNull(bookmark.folderId);
       break;
     default: {
-      // Include collab folder by folderid and if shared with
-      const isFolderSharedWithUser = orm.and(
-        orm.eq(folder.id, collabFolder.folderId),
-        orm.eq(collabFolder.sharedWithUserId, userId),
-      );
+      const folderRowId = await getFolderId(folderId, userId);
 
-      // Check folder accibility by userId and if shared with
-      const isAccessibleFolderByUser = orm.and(
-        orm.or(
-          orm.eq(folder.userId, userId),
-          orm.eq(collabFolder.sharedWithUserId, userId),
-        ),
-        orm.eq(folder.publicId, folderId.trim()),
-      );
-
-      const folderObj = await db
-        .select({ id: folder.id })
-        .from(folder)
-        .leftJoin(collabFolder, isFolderSharedWithUser)
-        .where(isAccessibleFolderByUser);
-
-      if (!folderObj[0]?.id) {
-        throwError(
-          "NOT_FOUND",
-          `Folder with slug ${folderId} not found`,
-          "bookmarks.folders.get",
-        );
+      if (!folderRowId) {
+        throwError("NOT_FOUND", `Folder with id ${folderId} not found`, source);
       }
 
       const filterFlag = c.req.query("filter");
 
       condition = orm.and(
-        orm.eq(bookmark.folderId, folderObj[0].id),
+        orm.eq(bookmark.folderId, folderRowId),
         ...(filterFlag !== "" && filterFlag !== "archived"
           ? [getFilterCondition(c.req.query())]
           : [
@@ -702,11 +673,7 @@ router.get("/folder/:id", async (c) => {
   });
 
   if (data.length === 0) {
-    throwError(
-      "NOT_FOUND",
-      `No bookmarks exists in folder ${folderId}`,
-      "bookmarks.get",
-    );
+    throwError("NOT_FOUND", "No bookmarks exists in the folder", source);
   }
 
   return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
@@ -807,7 +774,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     nonce,
   } = c.req.valid("json");
 
-  const folderData = await getFolder(folderId, userId);
+  const folderRowId = await getFolderId(folderId, userId);
 
   let siteMeta: LinkPreviewResponsse | undefined;
 
@@ -835,7 +802,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   const payload = isEncrypted
     ? {
-        folderId: folderData?.id,
+        folderId: folderRowId,
         title,
         description,
         url,
@@ -845,7 +812,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
         updatedAt: orm.sql`NOW()`,
       }
     : {
-        folderId: folderData?.id,
+        folderId: folderRowId,
         title: title ?? (siteMeta?.data?.title || "Untitled"),
         description: description ?? (siteMeta?.data?.description || ""),
         url,
@@ -1069,7 +1036,7 @@ router.patch(
     }
 
     const userId = await getUserId(c);
-    const folderNumericId = await getFolderId(userId, folderId);
+    const folderNumericId = await getFolderId(folderId, userId);
 
     const data = await db
       .update(bookmark)
