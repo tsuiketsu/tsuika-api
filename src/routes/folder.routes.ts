@@ -1,5 +1,6 @@
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { Context } from "hono";
+import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { generatePublicId } from "@/utils/nanoid";
@@ -149,6 +150,7 @@ router.get("/total-count", async (c) => {
 // -----------------------------------------
 router.get("/", async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
+
   const folderIds = new URL(c.req.url).searchParams.getAll("id");
 
   const userId = await getUserId(c);
@@ -162,10 +164,16 @@ router.get("/", async (c) => {
   const data = await db
     .select(folderSelectPublicFields)
     .from(folder)
-    .where(and(whereUserId(userId), condition))
+    .leftJoin(collabFolder, eq(collabFolder.folderId, folder.id))
     .leftJoin(
       sharedFolder,
       and(whereUserId(userId), eq(sharedFolder.folderId, folder.id)),
+    )
+    .where(
+      and(
+        or(whereUserId(userId), eq(collabFolder.sharedWithUserId, userId)),
+        condition,
+      ),
     )
     .limit(limit)
     .offset(offset);
@@ -182,7 +190,15 @@ router.get("/", async (c) => {
     {
       success: true,
       message: "Successfully fetched folders",
-      data,
+      // Get rid of duplicated caused by collabFolder join, maybe fix that
+      // in query if there's a way
+      data: data.reduce((acc, folder) => {
+        if (!acc.some(({ id }) => id === folder.id)) {
+          acc.push(folder as FolderType);
+        }
+
+        return acc;
+      }, [] as FolderType[]),
       pagination: {
         page,
         limit,
@@ -330,6 +346,36 @@ router.delete(":id", async (c) => {
     },
     200,
   );
+});
+
+// -----------------------------------------
+// GET FOLDERS
+// -----------------------------------------
+router.get("/collborative", async (c) => {
+  const userId = await getUserId(c);
+
+  const data = await db.query.collabFolder.findMany({
+    where: (f, { eq }) => eq(f.sharedWithUserId, userId),
+    with: {
+      folder: true,
+      owner: {
+        columns: {
+          name: true,
+          username: true,
+          image: true,
+        },
+      },
+    },
+    columns: {
+      permissionLevel: true,
+    },
+  });
+
+  return c.json<SuccessResponse<unknown>>({
+    success: true,
+    message: "Successfully fetched all shared folders",
+    data,
+  });
 });
 
 export default router;
