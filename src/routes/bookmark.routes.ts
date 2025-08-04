@@ -2,6 +2,8 @@ import * as orm from "drizzle-orm";
 import type { Context } from "hono";
 import type { Metadata } from "sharp";
 import { z } from "zod";
+import { collabFolder } from "@/db/schema/collab-folder.schema";
+import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata } from "@/utils/image-metadata";
@@ -15,7 +17,6 @@ import {
   bookmarkSelectSchema,
 } from "../db/schema/bookmark.schema";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
-import { folder } from "../db/schema/folder.schema";
 import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
@@ -626,17 +627,28 @@ router.get("/folder/:id", async (c) => {
       condition = orm.isNull(bookmark.folderId);
       break;
     default: {
-      const folderObj = await db.query.folder.findFirst({
-        where: orm.and(
-          orm.eq(folder.userId, userId),
-          orm.eq(folder.publicId, folderId.trim()),
-        ),
-        columns: {
-          id: true,
-        },
-      });
+      // Include collab folder by folderid and if shared with
+      const isFolderSharedWithUser = orm.and(
+        orm.eq(folder.id, collabFolder.folderId),
+        orm.eq(collabFolder.sharedWithUserId, userId),
+      );
 
-      if (!folderObj?.id) {
+      // Check folder accibility by userId and if shared with
+      const isAccessibleFolderByUser = orm.and(
+        orm.or(
+          orm.eq(folder.userId, userId),
+          orm.eq(collabFolder.sharedWithUserId, userId),
+        ),
+        orm.eq(folder.publicId, folderId.trim()),
+      );
+
+      const folderObj = await db
+        .select({ id: folder.id })
+        .from(folder)
+        .leftJoin(collabFolder, isFolderSharedWithUser)
+        .where(isAccessibleFolderByUser);
+
+      if (!folderObj[0]?.id) {
         throwError(
           "NOT_FOUND",
           `Folder with slug ${folderId} not found`,
@@ -647,7 +659,7 @@ router.get("/folder/:id", async (c) => {
       const filterFlag = c.req.query("filter");
 
       condition = orm.and(
-        orm.eq(bookmark.folderId, folderObj.id),
+        orm.eq(bookmark.folderId, folderObj[0].id),
         ...(filterFlag !== "" && filterFlag !== "archived"
           ? [getFilterCondition(c.req.query())]
           : [
@@ -676,7 +688,7 @@ router.get("/folder/:id", async (c) => {
   const orderBy = getOrderDirection(c.req.query(), "folders.get");
 
   const data = await db.query.bookmark.findMany({
-    where: orm.and(orm.eq(bookmark.userId, userId), condition, queryCondition),
+    where: orm.and(condition, queryCondition),
     with: bookmarkJoins,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
