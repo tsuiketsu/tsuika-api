@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { user } from "@/db/schema/auth.schema";
@@ -13,6 +13,10 @@ import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
 
 const router = createRouter();
+
+const parseImage = (image: string): string | null => {
+  return image?.split("|")[1] || null;
+};
 
 // Gets user by either username or email
 const getUserByIdentifier = async (identifier: string) => {
@@ -98,9 +102,8 @@ router.post("/", zValidator("json", insertSchema), async (c) => {
 router.get("/:folderPublicId", async (c) => {
   const source = "collab-folders.get";
   const folderPublicId = c.req.param("folderPublicId");
-  const userId = await getUserId(c);
 
-  const response = await db
+  const members = await db
     .select({
       name: user.name,
       username: user.username,
@@ -109,23 +112,44 @@ router.get("/:folderPublicId", async (c) => {
     })
     .from(cFolder)
     .innerJoin(folder, eq(cFolder.folderId, folder.id))
-    .innerJoin(
-      user,
-      and(ne(user.id, userId), eq(user.id, cFolder.sharedWithUserId)),
-    )
+    .innerJoin(user, eq(user.id, cFolder.sharedWithUserId))
     .where(eq(folder.publicId, folderPublicId));
 
-  if (!response) {
+  if (!members) {
     throwError("NOT_FOUND", "Folder not found", source);
   }
+
+  if (members.length === 0) {
+    throwError("NOT_FOUND", "No members found", source);
+  }
+
+  const owner = await db
+    .select({ name: user.name, username: user.username, image: user.image })
+    .from(cFolder)
+    .innerJoin(folder, eq(cFolder.folderId, folder.id))
+    .innerJoin(user, eq(user.id, cFolder.ownerUserId))
+    .where(eq(folder.publicId, folderPublicId))
+    .limit(1);
+
+  if (!owner || owner[0] == null) {
+    throwError("NOT_FOUND", "Owner not found", source);
+  }
+
+  const parsedMembers = members.map((user) => ({
+    ...user,
+    image: parseImage(user.image ?? ""),
+  }));
+
+  const parsedOwner = {
+    ...owner[0],
+    image: parseImage(owner[0]?.image ?? ""),
+    permissionLevel: "owner",
+  };
 
   return c.json({
     success: true,
     message: "Successfully fetched users",
-    data: response.map((user) => ({
-      ...user,
-      image: user?.image?.split("|")[1] ?? null,
-    })),
+    data: [parsedOwner, ...parsedMembers],
   });
 });
 
