@@ -154,6 +154,20 @@ router.patch(
       throwError("NOT_FOUND", "Folder not found", source);
     }
 
+    // Check  user's authorization level
+    const selectedCollabFolder = await db.query.collabFolder.findFirst({
+      where: eq(cFolder.sharedWithUserId, member.id),
+      columns: { permissionLevel: true },
+    });
+
+    if (selectedCollabFolder?.permissionLevel !== "admin") {
+      throwError(
+        "UNAUTHORIZED",
+        "Only owner or admins can change other user's permissions",
+        source,
+      );
+    }
+
     const matchCondition = and(
       eq(cFolder.folderId, selectedFolder.id),
       eq(cFolder.sharedWithUserId, member.id),
@@ -161,8 +175,7 @@ router.patch(
 
     const payload = {
       permissionLevel,
-      updatedAt: sql`NOW(
-      )`,
+      updatedAt: sql`NOW()`,
     };
 
     const response = await db
