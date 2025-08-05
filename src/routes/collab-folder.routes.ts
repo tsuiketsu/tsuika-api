@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { user } from "@/db/schema/auth.schema";
@@ -161,9 +161,40 @@ router.patch(
   zValidator("json", insertSchema.omit({ folderPublicId: true })),
   async (c) => {
     const source = "collab-folders.patch";
-    const { identifier, permissionLevel } = c.req.valid("json");
+    const userId = await getUserId(c);
 
+    // Check  user's authorization level
+    const selectedCollabFolder = await db.query.collabFolder.findFirst({
+      where: or(
+        eq(cFolder.ownerUserId, userId),
+        eq(cFolder.sharedWithUserId, userId),
+      ),
+      columns: { ownerUserId: true, permissionLevel: true },
+    });
+
+    if (
+      selectedCollabFolder?.ownerUserId !== userId &&
+      selectedCollabFolder?.permissionLevel !== "admin"
+    ) {
+      throwError(
+        "UNAUTHORIZED",
+        "Only owner or admins can change other user's permissions",
+        source,
+      );
+    }
+
+    // Start the main process of changing other user's permission
+    const { identifier, permissionLevel } = c.req.valid("json");
     const member = await getUserByIdentifier(identifier);
+
+    // Prevent users from changing their own role
+    if (member?.id === userId) {
+      throwError(
+        "UNAUTHORIZED",
+        "Users cannot change their own roles or privileges",
+        source,
+      );
+    }
 
     if (!member) {
       throwError("NOT_FOUND", "User not found", source);
@@ -176,20 +207,6 @@ router.patch(
 
     if (!selectedFolder) {
       throwError("NOT_FOUND", "Folder not found", source);
-    }
-
-    // Check  user's authorization level
-    const selectedCollabFolder = await db.query.collabFolder.findFirst({
-      where: eq(cFolder.sharedWithUserId, member.id),
-      columns: { permissionLevel: true },
-    });
-
-    if (selectedCollabFolder?.permissionLevel !== "admin") {
-      throwError(
-        "UNAUTHORIZED",
-        "Only owner or admins can change other user's permissions",
-        source,
-      );
     }
 
     const matchCondition = and(
