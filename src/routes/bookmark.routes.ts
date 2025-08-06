@@ -316,7 +316,18 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   }
 
   const userId = await getUserId(c);
-  const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
+  const folderInfo = await getFolderInfo(folderId, userId);
+
+  if (
+    folderInfo?.permissionLevel != null &&
+    !["admin", "editor"].includes(folderInfo?.permissionLevel ?? "")
+  ) {
+    throwError(
+      "UNAUTHORIZED",
+      "Action not permitted: You do not have the necessary permissions",
+      source,
+    );
+  }
 
   // NOTE: Whole thing is not very robust, db.transaction is better choice
   // but that doesn't work with neon-http, also db.batch which is not
@@ -361,13 +372,29 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
         thumbnailWidth: imageMeta?.width,
       };
 
+  // Get the owner of folder, required when another user adding bookmark
+  // as member of folder
+  let ownerUserId = userId;
+
+  // permissionLevel null assumes folder is not a collaborative folder
+  if (folderInfo?.permissionLevel !== null) {
+    const selectedFolder = await db.query.folder.findFirst({
+      where: orm.eq(folder.id, folderInfo?.id),
+      columns: { userId: true },
+    });
+
+    if (selectedFolder) {
+      ownerUserId = selectedFolder.userId;
+    }
+  }
+
   const data: (Omit<BookmarkType, "id" | "folderId"> & { id: number })[] =
     await db
       .insert(bookmark)
       .values({
         publicId: generatePublicId(),
-        folderId: folderRowId,
-        userId: userId,
+        folderId: folderInfo?.id,
+        userId: ownerUserId,
         ...payload,
       })
       .returning();
