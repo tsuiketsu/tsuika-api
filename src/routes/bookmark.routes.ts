@@ -118,7 +118,7 @@ const authorizeAndFetchFolderId = async (
   const folderInfo = await getFolderInfo(folderId, userId);
   const role = folderInfo?.permissionLevel;
   const isAuthorized =
-    role !== null && !["admin", "editor"].includes(role ?? "");
+    role != null && !["admin", "editor"].includes(role ?? "");
 
   if (isAuthorized) {
     throwError(
@@ -264,8 +264,8 @@ async function verifyUserAccessByBookmark(
   console.log(response, role);
 
   if (
-    (role === null && selectedBookmark.userId !== userId) ||
-    (role !== null && !roles.includes(role ?? ""))
+    (role == null && selectedBookmark.userId !== userId) ||
+    (role != null && !roles.includes(role ?? ""))
   ) {
     throwError(
       "UNAUTHORIZED",
