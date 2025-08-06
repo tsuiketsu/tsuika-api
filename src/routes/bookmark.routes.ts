@@ -43,75 +43,30 @@ const whereBookmarkByUserAndPublicId = (userId: string, publicId: string) => {
   return orm.and(whereUserId(userId), wherePublicId(publicId));
 };
 
-const getBookmarkIdParam = (c: Context) => {
-  const id = c.req.param("id");
-
-  if (!id) {
-    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
-  }
-
-  return id;
-};
-
-const getBookmarkById = async (c: Context) => {
-  const id = getBookmarkIdParam(c);
-  const userId = await getUserId(c);
-
-  const prev = await db.query.bookmark.findFirst({
-    where: whereBookmarkByUserAndPublicId(userId, id),
-
-    columns: { id: true, url: true },
-  });
-
-  if (!prev) {
-    throwError(
-      "NOT_FOUND",
-      `Bookmark with id ${id} does not exists`,
-      "bookmars.get",
-    );
-  }
-
-  return { ...prev, url: prev.url ?? "" };
-};
-
-export const getBookmarkId = async (c: Context) => {
-  const source = "bookmarks.get";
-  const id = getBookmarkIdParam(c);
-
-  if (!id) {
-    throwError("MISSING_PARAMETER", "Bookmark ID is required", source);
-  }
-
-  c.set("bookmarkId", id);
-
-  const isBookmarkExists = await db.query.bookmark.findFirst({
-    where: whereBookmarkByUserAndPublicId(await getUserId(c), id),
-    columns: { id: true },
-  });
-
-  if (!isBookmarkExists) {
-    throwError("NOT_FOUND", `Bookmark with id ${id} does not exists`, source);
-  }
-
-  return id;
-};
-
 const setBookmarkFlag = async (
   c: Context,
   field: "isPinned" | "isArchived" | "isFavourite",
 ) => {
   const source = "bookmarks.patch";
-  const bookmarkId = await getBookmarkId(c);
   const { state } = await c.req.json();
+  const publicId = c.req.param("id");
+  const userId = await getUserId(c);
+
+  if (!publicId) {
+    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
+  }
 
   if (state == null) {
     throwError("REQUIRED_FIELD", "State is required", source);
   }
 
+  // Check if user authorized to changing anything related to bookmark
+  await verifyUserAccessByBookmark(publicId, userId);
+
   const result = await db
     .update(bookmark)
     .set({ [field]: state })
-    .where(whereBookmarkByUserAndPublicId(await getUserId(c), bookmarkId));
+    .where(orm.eq(bookmark.publicId, publicId));
 
   if (result.rowCount === 0) {
     throwError("DATABASE_ERROR", `Failed to change ${field} state`, source);
@@ -124,8 +79,6 @@ const setBookmarkFlag = async (
 };
 
 const getFolderInfo = async (folderId: string | undefined, userId: string) => {
-  const source = "bookmarks.folders.get";
-
   if (!folderId) return;
 
   const isFolderSharedWithUser = orm.and(
@@ -133,7 +86,7 @@ const getFolderInfo = async (folderId: string | undefined, userId: string) => {
     orm.eq(collabFolder.sharedWithUserId, userId),
   );
 
-  // Check folder accibility by userId and if shared with
+  // Check folder accessibility by userId and if shared with
   const isAccessibleFolderByUser = orm.and(
     orm.or(
       orm.eq(folder.userId, userId),
@@ -149,10 +102,33 @@ const getFolderInfo = async (folderId: string | undefined, userId: string) => {
     .where(isAccessibleFolderByUser);
 
   if (!data || data[0] == null || !data[0]?.id) {
-    throwError("NOT_FOUND", `Failed to get folder by id ${folderId}`, source);
+    throwError("NOT_FOUND", `Failed to get folder by id ${folderId}`, "");
   }
 
   return data[0];
+};
+
+const authorizeAndFetchFolderId = async (
+  folderId: string | undefined,
+  userId: string,
+) => {
+  // Allow user if folderId not found, means user can add bookmark
+  if (!folderId) return;
+
+  const folderInfo = await getFolderInfo(folderId, userId);
+  const role = folderInfo?.permissionLevel;
+  const isAuthorized =
+    role !== null && !["admin", "editor"].includes(role ?? "");
+
+  if (isAuthorized) {
+    throwError(
+      "UNAUTHORIZED",
+      "Action not permitted: You do not have the necessary permissions",
+      "",
+    );
+  }
+
+  return folderInfo?.id;
 };
 
 const getFilterCondition = (
@@ -252,12 +228,13 @@ const insertTags = async (
 
 // Check if user is authorized by permissionLevel and userId match allowed
 // to delete bookmark or not
-const isUserAuthorizedByBookmarkId = async (
-  bookmarkId: string,
+async function verifyUserAccessByBookmark(
+  publicId: string,
   userId: string,
-): Promise<boolean> => {
+  isReadAllowed = false,
+) {
   const selectedBookmark = await db.query.bookmark.findFirst({
-    where: orm.eq(bookmark.publicId, bookmarkId),
+    where: orm.eq(bookmark.publicId, publicId),
     columns: { id: true, userId: true },
   });
 
@@ -269,21 +246,34 @@ const isUserAuthorizedByBookmarkId = async (
   );
 
   const response = await db
-    .select({ permissionLevel: collabFolder.permissionLevel })
+    .select({ id: bookmark.id, permissionLevel: collabFolder.permissionLevel })
     .from(bookmark)
     .leftJoin(collabFolder, collabFolderCheck)
     .where(orm.eq(bookmark.id, selectedBookmark.id));
 
-  const role = response[0]?.permissionLevel;
-
-  // IF role not found then folder is not collaborative, hence checks if bookmark
-  // added by requested user or not; if yes assumed owner and allow operation
-  if (role === null) {
-    return selectedBookmark.userId === userId;
+  if (!response[0]?.id) {
+    throwError("NOT_FOUND", `Bookmark with id ${publicId} not found`, "");
   }
 
-  return ["admin", "editor"].includes(role ?? "");
-};
+  const role = response[0]?.permissionLevel;
+
+  const roles = ["editor", "admin"];
+
+  if (isReadAllowed) roles.push("viewer");
+
+  console.log(response, role);
+
+  if (
+    (role === null && selectedBookmark.userId !== userId) ||
+    (role !== null && !roles.includes(role ?? ""))
+  ) {
+    throwError(
+      "UNAUTHORIZED",
+      "Action not permitted: You do not have the necessary permissions",
+      "",
+    );
+  }
+}
 
 export const bookmarkPublicFields = {
   id: bookmark.publicId,
@@ -320,30 +310,17 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
     isEncrypted,
     nonce,
   } = c.req.valid("json");
-  console.log("Its not reaching here");
 
   if (!isEncrypted && !url) {
     throwError("INVALID_PARAMETER", "Url is required", "bookmarks.post");
   }
 
   const userId = await getUserId(c);
-
-  const folderInfo = await getFolderInfo(folderId, userId);
-
-  // Check for editing permission if user allowed to insert bookmark
-  if (!["admin", "editor"].includes(folderInfo?.permissionLevel ?? "")) {
-    console.log(folderInfo?.permissionLevel);
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions from the owner.",
-      source,
-    );
-  }
+  const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
 
   // NOTE: Whole thing is not very robust, db.transaction is better choice
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
-
   let siteMeta: LinkPreviewResponsse | undefined;
 
   if (!isEncrypted) {
@@ -389,7 +366,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
       .insert(bookmark)
       .values({
         publicId: generatePublicId(),
-        folderId: folderInfo?.id,
+        folderId: folderRowId,
         userId: userId,
         ...payload,
       })
@@ -431,6 +408,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 // -----------------------------------------
 // GET TOTAL BOOKMARKS COUNT
 // -----------------------------------------
+// FIX: Maybe include collaborative folder's bookmarks
 router.get("/total-count", async (c) => {
   const condition = getFilterCondition(c.req.query());
   const userId = await getUserId(c);
@@ -455,15 +433,15 @@ router.get("/total-count", async (c) => {
 });
 
 // -----------------------------------------
-// GET ALL BOOKMARKS
+// GET ALL BOOKMARKS OR QUERY BY PARAM
 // -----------------------------------------
+// FIX: Maybe include collaborative folder's bookmarks
 router.get("/", async (c) => {
   const source = "bookmarks.get";
   const queryUrl = c.req.query("url");
   const userId = await getUserId(c);
 
   // Fetch bookmarks by url if query param given
-
   if (queryUrl && queryUrl.trim() !== "") {
     const data = await db.query.bookmark.findFirst({
       where: orm.and(
@@ -565,6 +543,7 @@ router.get("/", async (c) => {
 // -----------------------------------------
 // GET BOOKMARKS BY TAG PUBLIC ID
 // -----------------------------------------
+// FIX: Maybe include collaborative folder's bookmarks
 router.get("/tag/:publicId", async (c) => {
   const userId = await getUserId(c);
   const publicId = c.req.param("publicId");
@@ -639,9 +618,9 @@ router.get("/tag/:publicId", async (c) => {
 // GET BOOKMARKS BY FOLDER ID
 // -----------------------------------------
 router.get("/folder/:id", async (c) => {
-  const userId = await getUserId(c);
-  const folderId = c.req.param("id");
   const source = "bookmarks.get";
+  const folderId = c.req.param("id");
+  const userId = await getUserId(c);
 
   if (!folderId || folderId.trim() === "") {
     throwError("INVALID_PARAMETER", "Invalid folder name", "bookmarks.get");
@@ -699,8 +678,18 @@ router.get("/folder/:id", async (c) => {
 
   const orderBy = getOrderDirection(c.req.query(), "folders.get");
 
+  // If folder type is bookmark flag type include user_id check else omit
+  const isUserCondition = [
+    "pinned",
+    "archived",
+    "favorites",
+    "unsorted",
+  ].includes(folderId.toLowerCase().trim())
+    ? orm.eq(folder.userId, userId)
+    : undefined;
+
   const data = await db.query.bookmark.findMany({
-    where: orm.and(condition, queryCondition),
+    where: orm.and(isUserCondition, condition, queryCondition),
     with: bookmarkJoins,
     orderBy: ({ updatedAt }, { desc, asc }) => {
       if (orderBy) {
@@ -745,23 +734,29 @@ router.get("/folder/:id", async (c) => {
 // -----------------------------------------
 // GET BOOKMARK BY ID
 // -----------------------------------------
-router.get("/", async (c) => {
+router.get("/:id", async (c) => {
   const source = "bookmarks.get";
   const userId = await getUserId(c);
 
-  const bookmarkId = await getBookmarkId(c);
+  const bookmarkPublicId = c.req.param("id");
 
-  if (!bookmarkId) {
+  if (!bookmarkPublicId) {
     throwError("MISSING_PARAMETER", "Bookmark ID is required", source);
   }
 
+  await verifyUserAccessByBookmark(bookmarkPublicId, userId, true);
+
   const data = await db.query.bookmark.findFirst({
-    where: whereBookmarkByUserAndPublicId(userId, bookmarkId),
+    where: orm.eq(bookmark.publicId, bookmarkPublicId),
     with: bookmarkJoins,
   });
 
   if (!data) {
-    throwError("NOT_FOUND", `Bookmark with ${bookmarkId} not found`, source);
+    throwError(
+      "NOT_FOUND",
+      `Bookmark with ${bookmarkPublicId} not found`,
+      source,
+    );
   }
 
   const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
@@ -797,9 +792,19 @@ router.get("/", async (c) => {
 router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   const source = "bookmarks.put";
   const userId = await getUserId(c);
+  const publicId = c.req.param("id");
+
+  await verifyUserAccessByBookmark(publicId, userId);
 
   // Get previous bookmark id and url
-  const prev = await getBookmarkById(c);
+  const prev = await db.query.bookmark.findFirst({
+    where: orm.eq(bookmark.publicId, publicId),
+    columns: { id: true, url: true },
+  });
+
+  if (!prev) {
+    throwError("NOT_FOUND", "Bookmark not found", source);
+  }
 
   const {
     folderId,
@@ -813,15 +818,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     nonce,
   } = c.req.valid("json");
 
-  const folderInfo = await getFolderInfo(folderId, userId);
-
-  if (!["admin", "editor"].includes(folderInfo?.permissionLevel ?? "")) {
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions from the owner.",
-      source,
-    );
-  }
+  const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
 
   let siteMeta: LinkPreviewResponsse | undefined;
 
@@ -832,7 +829,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   if (!siteMeta?.data) {
     console.error(
-      `Fialed to fetch metadata of url ${url}`,
+      `Failed to fetch metadata of url ${url}`,
       siteMeta?.message || "",
     );
   }
@@ -849,7 +846,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 
   const payload = isEncrypted
     ? {
-        folderId: folderInfo?.id,
+        folderId: folderRowId,
         title,
         description,
         url,
@@ -859,7 +856,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
         updatedAt: orm.sql`NOW()`,
       }
     : {
-        folderId: folderInfo?.id,
+        folderId: folderRowId,
         title: title ?? (siteMeta?.data?.title || "Untitled"),
         description: description ?? (siteMeta?.data?.description || ""),
         url,
@@ -874,9 +871,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   const data: Omit<BookmarkType, "folderId">[] = await db
     .update(bookmark)
     .set(payload)
-    .where(
-      orm.and(orm.eq(bookmark.userId, userId), orm.eq(bookmark.id, prev.id)),
-    )
+    .where(orm.eq(bookmark.id, prev.id))
     .returning(bookmarkPublicFields);
 
   if (data.length === 0 || data[0] == null) {
@@ -916,13 +911,7 @@ router.delete("/bulk", async (c) => {
   const userId = await getUserId(c);
   const { bookmarkIds } = await c.req.json();
 
-  if (!(await isUserAuthorizedByBookmarkId(bookmarkIds[0], userId))) {
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions from the owner.",
-      source,
-    );
-  }
+  await verifyUserAccessByBookmark(bookmarkIds[0], userId);
 
   if (!bookmarkIds || bookmarkIds.length === 0) {
     throwError("MISSING_PARAMETER", "Bookmark IDs are required", source);
@@ -955,13 +944,7 @@ router.delete(":id", async (c) => {
   const source = "bookmarks.delete";
   const userId = await getUserId(c);
 
-  if (!(await isUserAuthorizedByBookmarkId(c.req.param("id"), userId))) {
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions from the owner.",
-      source,
-    );
-  }
+  await verifyUserAccessByBookmark(c.req.param("id"), userId);
 
   // Remove bookmark from database
   const data: { deletedBookmarkId: string }[] = await db
@@ -986,15 +969,8 @@ router.patch(":id/thumbnail", async (c) => {
   const source = "bookmarks.patch";
   const userId = await getUserId(c);
 
-  if (!(await isUserAuthorizedByBookmarkId(c.req.param("id"), userId))) {
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions from the owner.",
-      source,
-    );
-  }
-
-  const bookmarkId = await getBookmarkId(c);
+  const publicId = c.req.param("id");
+  await verifyUserAccessByBookmark(publicId, userId);
 
   // Verify if thumbnail path provided
   const body = await c.req.parseBody();
@@ -1018,7 +994,7 @@ router.patch(":id/thumbnail", async (c) => {
 
   // Get previous thumbnail url before updating
   const prevThumbnail = await db.query.bookmark.findFirst({
-    where: whereBookmarkByUserAndPublicId(userId, bookmarkId),
+    where: whereBookmarkByUserAndPublicId(userId, publicId),
     columns: {
       thumbnail: true,
     },
@@ -1031,7 +1007,7 @@ router.patch(":id/thumbnail", async (c) => {
       thumbnail: thumbnail.fileId,
       updatedAt: orm.sql`NOW()`,
     })
-    .where(whereBookmarkByUserAndPublicId(userId, bookmarkId))
+    .where(whereBookmarkByUserAndPublicId(userId, publicId))
     .returning({
       thumbnail: bookmark.thumbnail,
     });
@@ -1086,20 +1062,12 @@ router.patch(
     }
 
     const userId = await getUserId(c);
-    const folderInfo = await getFolderInfo(folderId, userId);
-
-    if (!["admin", "editor"].includes(folderInfo?.permissionLevel ?? "")) {
-      throwError(
-        "UNAUTHORIZED",
-        "Action not permitted: You do not have the necessary permissions from the owner.",
-        source,
-      );
-    }
+    const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
 
     const data = await db
       .update(bookmark)
       .set({
-        folderId: folderInfo?.id,
+        folderId: folderRowId,
       })
       .where(orm.inArray(bookmark.publicId, bookmarkIds));
 
