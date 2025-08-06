@@ -252,7 +252,7 @@ const insertTags = async (
 
 // Check if user is authorized by permissionLevel and userId match allowed
 // to delete bookmark or not
-const canUserDeleteBookmark = async (
+const isUserAuthorizedByBookmarkId = async (
   bookmarkId: string,
   userId: string,
 ): Promise<boolean> => {
@@ -261,22 +261,28 @@ const canUserDeleteBookmark = async (
     columns: { id: true, userId: true },
   });
 
-  if (selectedBookmark?.id && selectedBookmark.userId !== userId) {
-    const collabFolderCheck = orm.and(
-      orm.eq(collabFolder.folderId, bookmark.folderId),
-      orm.eq(collabFolder.sharedWithUserId, userId),
-    );
+  if (!selectedBookmark?.id) return false;
 
-    const response = await db
-      .select({ permissionLevel: collabFolder.permissionLevel })
-      .from(bookmark)
-      .leftJoin(collabFolder, collabFolderCheck)
-      .where(orm.eq(bookmark.id, selectedBookmark.id));
+  const collabFolderCheck = orm.and(
+    orm.eq(collabFolder.folderId, bookmark.folderId),
+    orm.eq(collabFolder.sharedWithUserId, userId),
+  );
 
-    return ["admin", "editor"].includes(response[0]?.permissionLevel ?? "");
+  const response = await db
+    .select({ permissionLevel: collabFolder.permissionLevel })
+    .from(bookmark)
+    .leftJoin(collabFolder, collabFolderCheck)
+    .where(orm.eq(bookmark.id, selectedBookmark.id));
+
+  const role = response[0]?.permissionLevel;
+
+  // IF role not found then folder is not collaborative, hence checks if bookmark
+  // added by requested user or not; if yes assumed owner and allow operation
+  if (role === null) {
+    return selectedBookmark.userId === userId;
   }
 
-  return true;
+  return ["admin", "editor"].includes(role ?? "");
 };
 
 export const bookmarkPublicFields = {
@@ -910,7 +916,7 @@ router.delete("/bulk", async (c) => {
   const userId = await getUserId(c);
   const { bookmarkIds } = await c.req.json();
 
-  if (!(await canUserDeleteBookmark(bookmarkIds[0], userId))) {
+  if (!(await isUserAuthorizedByBookmarkId(bookmarkIds[0], userId))) {
     throwError(
       "UNAUTHORIZED",
       "Action not permitted: You do not have the necessary permissions from the owner.",
@@ -925,9 +931,7 @@ router.delete("/bulk", async (c) => {
   // Remove bookmark from database
   const data = await db
     .delete(bookmark)
-    .where(
-      orm.and(whereUserId(userId), orm.inArray(bookmark.publicId, bookmarkIds)),
-    )
+    .where(orm.inArray(bookmark.publicId, bookmarkIds))
     .returning({ deletedBookmarkId: bookmark.publicId });
 
   if (data.length === 0) {
@@ -951,7 +955,7 @@ router.delete(":id", async (c) => {
   const source = "bookmarks.delete";
   const userId = await getUserId(c);
 
-  if (!(await canUserDeleteBookmark(c.req.param("id"), userId))) {
+  if (!(await isUserAuthorizedByBookmarkId(c.req.param("id"), userId))) {
     throwError(
       "UNAUTHORIZED",
       "Action not permitted: You do not have the necessary permissions from the owner.",
@@ -959,12 +963,10 @@ router.delete(":id", async (c) => {
     );
   }
 
-  const bookmarkId = await getBookmarkId(c);
-
   // Remove bookmark from database
   const data: { deletedBookmarkId: string }[] = await db
     .delete(bookmark)
-    .where(whereBookmarkByUserAndPublicId(userId, bookmarkId))
+    .where(orm.eq(bookmark.publicId, c.req.param("id")))
     .returning({ deletedBookmarkId: bookmark.publicId });
 
   if (data.length === 0) {
@@ -984,7 +986,7 @@ router.patch(":id/thumbnail", async (c) => {
   const source = "bookmarks.patch";
   const userId = await getUserId(c);
 
-  if (!(await canUserDeleteBookmark(c.req.param("id"), userId))) {
+  if (!(await isUserAuthorizedByBookmarkId(c.req.param("id"), userId))) {
     throwError(
       "UNAUTHORIZED",
       "Action not permitted: You do not have the necessary permissions from the owner.",
