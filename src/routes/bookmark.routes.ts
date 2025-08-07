@@ -21,7 +21,7 @@ import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { BookmarkType } from "../types/schema.types";
-import { getOrderDirection, getPagination, getUserId } from "../utils";
+import { getOrderDirection, getPagination, getUserId, pick } from "../utils";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
 
@@ -29,18 +29,6 @@ const router = createRouter();
 
 const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
-};
-
-const whereUserId = (userId: string) => {
-  return orm.eq(bookmark.userId, userId);
-};
-
-const wherePublicId = (publicId: string) => {
-  return orm.eq(bookmark.publicId, publicId);
-};
-
-const whereBookmarkByUserAndPublicId = (userId: string, publicId: string) => {
-  return orm.and(whereUserId(userId), wherePublicId(publicId));
 };
 
 const setBookmarkFlag = async (
@@ -165,26 +153,6 @@ const getFilterCondition = (
   return condition;
 };
 
-const bookmarkJoins = {
-  bookmarkFolder: {
-    columns: { publicId: true },
-  },
-  bookmarkTag: {
-    columns: { appliedAt: true },
-    with: {
-      tag: {
-        columns: {
-          publicId: true,
-          name: true,
-          color: true,
-        },
-      },
-    },
-  },
-} satisfies NonNullable<
-  Parameters<(typeof db)["query"]["bookmark"]["findFirst" | "findMany"]>[0]
->["with"];
-
 const getTagIds = async (
   userId: string,
   tagPublicIds: string[] | undefined,
@@ -193,7 +161,7 @@ const getTagIds = async (
 
   const tags = await db.query.tag.findMany({
     where: orm.and(
-      whereUserId(userId),
+      orm.eq(bookmark.userId, userId),
       orm.inArray(tag.publicId, tagPublicIds),
     ),
     columns: { id: true },
@@ -238,7 +206,9 @@ async function verifyUserAccessByBookmark(
     columns: { id: true, userId: true },
   });
 
-  if (!selectedBookmark?.id) return false;
+  if (!selectedBookmark?.id) {
+    throwError("NOT_FOUND", `Bookmark with id ${publicId} not found`, "");
+  }
 
   const collabFolderCheck = orm.and(
     orm.eq(collabFolder.folderId, bookmark.folderId),
@@ -261,36 +231,54 @@ async function verifyUserAccessByBookmark(
 
   if (isReadAllowed) roles.push("viewer");
 
-  console.log(response, role);
+  if (role == null && selectedBookmark.userId !== userId) {
+    throwError("NOT_FOUND", `Bookmark with id ${publicId} not found`, "");
+  }
 
-  if (
-    (role == null && selectedBookmark.userId !== userId) ||
-    (role != null && !roles.includes(role ?? ""))
-  ) {
-    throwError(
-      "UNAUTHORIZED",
-      "Action not permitted: You do not have the necessary permissions",
-      "",
-    );
+  if (role !== null && !roles.includes(role ?? "")) {
+    throwError("UNAUTHORIZED", "Action not permitted", "");
   }
 }
 
+const bookmarkJoins = {
+  bookmarkFolder: {
+    columns: { publicId: true },
+  },
+  bookmarkTag: {
+    columns: { appliedAt: true },
+    with: {
+      tag: {
+        columns: {
+          publicId: true,
+          name: true,
+          color: true,
+        },
+      },
+    },
+  },
+} satisfies NonNullable<
+  Parameters<(typeof db)["query"]["bookmark"]["findFirst" | "findMany"]>[0]
+>["with"];
+
+// Fields that should be selected and allowed to be returned as public values
 export const bookmarkPublicFields = {
   id: bookmark.publicId,
-  title: bookmark.title,
-  description: bookmark.description,
-  url: bookmark.url,
-  faviconUrl: bookmark.faviconUrl,
-  thumbnail: bookmark.thumbnail,
-  thumbnailWidth: bookmark.thumbnailWidth,
-  thumbnailHeight: bookmark.thumbnailHeight,
-  isPinned: bookmark.isPinned,
-  isEncrypted: bookmark.isEncrypted,
-  nonce: bookmark.nonce,
-  isFavourite: bookmark.isFavourite,
-  isArchived: bookmark.isArchived,
-  createdAt: bookmark.createdAt,
-  updatedAt: bookmark.updatedAt,
+  ...pick(bookmark, [
+    "title",
+    "description",
+    "url",
+    "faviconUrl",
+    "thumbnail",
+    "thumbnailHeight",
+    "thumbnailWidth",
+    "isPinned",
+    "isEncrypted",
+    "nonce",
+    "isFavourite",
+    "isArchived",
+    "createdAt",
+    "updatedAt",
+  ]),
 };
 
 // -----------------------------------------
@@ -379,7 +367,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   // permissionLevel null assumes folder is not a collaborative folder
   if (folderInfo?.permissionLevel !== null) {
     const selectedFolder = await db.query.folder.findFirst({
-      where: orm.eq(folder.id, folderInfo?.id),
+      where: orm.eq(folder.id, folderInfo?.id!),
       columns: { userId: true },
     });
 
@@ -443,7 +431,7 @@ router.get("/total-count", async (c) => {
   const data = await db
     .select({ count: orm.count() })
     .from(bookmark)
-    .where(orm.and(whereUserId(userId), condition));
+    .where(orm.and(orm.eq(bookmark.userId, userId), condition));
 
   if (!data || data[0] == null) {
     throwError("NOT_FOUND", "No bookmarks found", "bookmarks.get");
@@ -520,7 +508,7 @@ router.get("/", async (c) => {
   const data = await db.query.bookmark.findMany({
     with: bookmarkJoins,
     where: orm.and(
-      whereUserId(userId),
+      orm.eq(bookmark.userId, userId),
       orm.eq(bookmark.isEncrypted, false),
       condition,
     ),
@@ -1021,7 +1009,7 @@ router.patch(":id/thumbnail", async (c) => {
 
   // Get previous thumbnail url before updating
   const prevThumbnail = await db.query.bookmark.findFirst({
-    where: whereBookmarkByUserAndPublicId(userId, publicId),
+    where: orm.eq(bookmark.publicId, publicId),
     columns: {
       thumbnail: true,
     },
@@ -1034,7 +1022,7 @@ router.patch(":id/thumbnail", async (c) => {
       thumbnail: thumbnail.fileId,
       updatedAt: orm.sql`NOW()`,
     })
-    .where(whereBookmarkByUserAndPublicId(userId, publicId))
+    .where(orm.eq(bookmark.publicId, publicId))
     .returning({
       thumbnail: bookmark.thumbnail,
     });
