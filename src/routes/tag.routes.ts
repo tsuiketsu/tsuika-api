@@ -51,27 +51,16 @@ const tagPublicFields = {
 // ADD NEW TAG
 // -----------------------------------------
 router.post("/", zValidator("json", tagInsertSchema), async (c) => {
+  const source = "tags.post";
   const userId = await getUserId(c);
 
   const { name, color } = c.req.valid("json");
-
-  const isTagExists = await db.query.tag.findFirst({
-    where: eq(tag.name, name.toLowerCase().trim()),
-  });
-
-  if (isTagExists) {
-    throwError(
-      "CONFLICT",
-      `Tag with name "${name.toLowerCase()}" already found`,
-      "tags.post",
-    );
-  }
 
   if (!tinycolor(color).isValid()) {
     throwError(
       "INVALID_PARAMETER",
       "Color must be a valid CSS color value",
-      "tags.post",
+      source,
     );
   }
 
@@ -86,7 +75,7 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
     .returning(tagPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to add tag", "tags.post");
+    throwError("INTERNAL_ERROR", "Failed to add tag", source);
   }
 
   return c.json<SuccessResponse<TagType>>(

@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { bigserial, integer, pgTable, text } from "drizzle-orm/pg-core";
+import { bigserial, integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 import {
   createInsertSchema,
   createSelectSchema,
@@ -10,17 +10,21 @@ import { timestamps } from "../constants";
 import { user } from "./auth.schema";
 import { bookmarkTag } from "./bookmark-tag.schema";
 
-export const tag = pgTable("tags", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  publicId: text("public_id").notNull().unique(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull().unique(),
-  color: text("color").notNull(),
-  useCount: integer("use_count").default(0),
-  ...timestamps,
-});
+export const tag = pgTable(
+  "tags",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull(),
+    useCount: integer("use_count").default(0),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.userId, t.name)],
+);
 
 export const tagRelations = relations(tag, ({ one, many }) => ({
   owner: one(user, {
