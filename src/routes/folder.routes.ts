@@ -1,5 +1,5 @@
 import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
@@ -28,7 +28,7 @@ const validateFolderName = createFieldValidator({
   },
 });
 
-const getFolderId = (c: Context): string => {
+const getFolderIdParam = (c: Context): string => {
   const folderId = c.req.param("id");
 
   if (!folderId) {
@@ -61,6 +61,52 @@ const verifyFolderExistance = async (folderId: string) => {
 
 const whereUserId = (userId: string) => {
   return eq(folder.userId, userId);
+};
+
+export const getFolder = async (
+  folderId: string | undefined,
+  userId: string,
+) => {
+  if (!folderId) return;
+
+  const isFolderSharedWithUser = and(
+    eq(folder.id, collabFolder.folderId),
+    eq(collabFolder.sharedWithUserId, userId),
+  );
+
+  // Check folder accessibility by userId and if shared with
+  const isAccessibleFolderByUser = and(
+    or(eq(folder.userId, userId), eq(collabFolder.sharedWithUserId, userId)),
+    eq(folder.publicId, folderId),
+  );
+
+  const data = await db
+    .select({ id: folder.id, permissionLevel: collabFolder.permissionLevel })
+    .from(folder)
+    .leftJoin(collabFolder, isFolderSharedWithUser)
+    .where(isAccessibleFolderByUser);
+
+  if (!data || data[0] == null || !data[0]?.id) {
+    throwError("NOT_FOUND", `Failed to get folder by id ${folderId}`, "");
+  }
+
+  return data[0];
+};
+
+export const verifyUserAuthorization = async (c: Context, next: Next) => {
+  const publicId = c.req.param("id");
+  const userId = await getUserId(c);
+
+  const folder = await getFolder(publicId, userId);
+
+  const role = folder?.permissionLevel;
+  const isAdmin = folder?.permissionLevel === "admin";
+
+  if (role == null || isAdmin) {
+    return next();
+  }
+
+  throwError("UNAUTHORIZED", "Action not permitted", "");
 };
 
 export const folderPublicFields = {
@@ -97,10 +143,6 @@ router.get("/all", async (c) => {
       sharedFolder,
       and(whereUserId(userId), eq(sharedFolder.folderId, folder.id)),
     );
-
-  console.log(data);
-
-  // const data = await db.select()
 
   if (data.length === 0) {
     throwError(
@@ -280,51 +322,52 @@ router.post(
 // -----------------------------------------
 // UPDATE FOLDER
 // -----------------------------------------
-router.put(":id", zValidator("json", folderInsertSchema), async (c) => {
-  const { name, description } = c.req.valid("json");
+router.put(
+  ":id",
+  zValidator("json", folderInsertSchema),
+  verifyUserAuthorization,
+  async (c) => {
+    const source = "folders.post";
+    const folderId = getFolderIdParam(c);
 
-  const folderId = getFolderId(c);
-  const userId = await getUserId(c);
+    const { name, description } = c.req.valid("json");
 
-  const { name: folderName, description: folderDesc } =
-    await verifyFolderExistance(folderId);
+    const { name: folderName, description: folderDesc } =
+      await verifyFolderExistance(folderId);
 
-  if (folderName === name.trim() && folderDesc === description?.trim()) {
-    throwError(
-      "CONFLICT",
-      "Folder name and description are the same as before",
-      "folders.post",
+    if (folderName === name.trim() && folderDesc === description?.trim()) {
+      throwError("CONFLICT", "Folder name/description are same", source);
+    }
+
+    const data = await db
+      .update(folder)
+      .set({
+        name: name.trim(),
+        description: description?.trim(),
+      })
+      .where(eq(folder.publicId, folderId))
+      .returning(folderPublicFields);
+
+    if (data.length === 0 || data[0] == null) {
+      throwError("INTERNAL_ERROR", "Failed to update folder", source);
+    }
+
+    return c.json<SuccessResponse<FolderType>>(
+      {
+        success: true,
+        message: "Successfully updated folder",
+        data: data[0],
+      },
+      200,
     );
-  }
-
-  const data = await db
-    .update(folder)
-    .set({
-      name: name.trim(),
-      description: description?.trim(),
-    })
-    .where(and(eq(folder.userId, userId), eq(folder.publicId, folderId)))
-    .returning(folderPublicFields);
-
-  if (data.length === 0 || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to update folder", "folders.put");
-  }
-
-  return c.json<SuccessResponse<FolderType>>(
-    {
-      success: true,
-      message: "Successfully updated folder",
-      data: data[0],
-    },
-    200,
-  );
-});
+  },
+);
 
 // -----------------------------------------
 // DELETE FOLDER
 // -----------------------------------------
 router.delete(":id", async (c) => {
-  const folderId = getFolderId(c);
+  const folderId = getFolderIdParam(c);
   const userId = await getUserId(c);
 
   void (await verifyFolderExistance(folderId));

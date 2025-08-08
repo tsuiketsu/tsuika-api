@@ -24,6 +24,7 @@ import type { BookmarkType } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId, pick } from "../utils";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { zValidator } from "../utils/validator-wrapper";
+import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
 
@@ -66,36 +67,6 @@ const setBookmarkFlag = async (
   );
 };
 
-const getFolderInfo = async (folderId: string | undefined, userId: string) => {
-  if (!folderId) return;
-
-  const isFolderSharedWithUser = orm.and(
-    orm.eq(folder.id, collabFolder.folderId),
-    orm.eq(collabFolder.sharedWithUserId, userId),
-  );
-
-  // Check folder accessibility by userId and if shared with
-  const isAccessibleFolderByUser = orm.and(
-    orm.or(
-      orm.eq(folder.userId, userId),
-      orm.eq(collabFolder.sharedWithUserId, userId),
-    ),
-    orm.eq(folder.publicId, folderId),
-  );
-
-  const data = await db
-    .select({ id: folder.id, permissionLevel: collabFolder.permissionLevel })
-    .from(folder)
-    .leftJoin(collabFolder, isFolderSharedWithUser)
-    .where(isAccessibleFolderByUser);
-
-  if (!data || data[0] == null || !data[0]?.id) {
-    throwError("NOT_FOUND", `Failed to get folder by id ${folderId}`, "");
-  }
-
-  return data[0];
-};
-
 const authorizeAndFetchFolderId = async (
   folderId: string | undefined,
   userId: string,
@@ -105,10 +76,8 @@ const authorizeAndFetchFolderId = async (
 
   const folderInfo = await getFolderInfo(folderId, userId);
   const role = folderInfo?.permissionLevel;
-  const isAuthorized =
-    role != null && !["admin", "editor"].includes(role ?? "");
 
-  if (isAuthorized) {
+  if (role != null && !["admin", "editor"].includes(role ?? "")) {
     throwError(
       "UNAUTHORIZED",
       "Action not permitted: You do not have the necessary permissions",
