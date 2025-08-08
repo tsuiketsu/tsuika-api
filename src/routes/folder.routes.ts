@@ -325,6 +325,7 @@ router.post(
 router.put(
   ":id",
   zValidator("json", folderInsertSchema),
+  validateFolderName,
   verifyUserAuthorization,
   async (c) => {
     const source = "folders.post";
