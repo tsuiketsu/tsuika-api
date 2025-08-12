@@ -23,8 +23,7 @@
     "dev:tunnel": "NODE_ENV=development bun run --env-file=.env.tunnel --host src/index.ts",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
-    "lint:commit": "commitlint --edit",
-    "start:db": "docker compose up && sleep 2 && bun run drizzle-kit studio"
+    "lint:commit": "commitlint --edit"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
