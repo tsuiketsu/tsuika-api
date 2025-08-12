@@ -20,6 +20,7 @@
     "type-check": "tsc --noEmit",
     "start": "bun src/index.js",
     "dev": "NODE_ENV=development bun run --hot src/index.ts",
+    "dev:tunnel": "NODE_ENV=development bun run --env-file=.env.tunnel --host src/index.ts",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
     "lint:commit": "commitlint --edit",
