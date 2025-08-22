@@ -809,13 +809,13 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
   // If current and prev.url same don't fetch site's metadata
   if (getCleanUrl(prev.url) !== getCleanUrl(url)) {
     siteMeta = await fetchLinkPreview(url);
-  }
 
-  if (!siteMeta?.data) {
-    console.error(
-      `Failed to fetch metadata of url ${url}`,
-      siteMeta?.message || "",
-    );
+    if (!siteMeta?.data) {
+      console.error(
+        `Failed to fetch metadata of url ${url}`,
+        siteMeta?.message || "",
+      );
+    }
   }
 
   const image = siteMeta?.data?.images?.[0] || undefined;
