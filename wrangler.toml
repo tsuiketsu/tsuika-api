@@ -1,0 +1,7 @@
+name = "tsuika-api"
+main = "src/index.ts"
+compatibility_date = "2025-08-22"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8000

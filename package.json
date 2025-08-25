@@ -6,10 +6,15 @@
   "main": "index.ts",
   "type": "module",
   "keywords": [
-    "API",
-    "Backend",
-    "Hono",
-    "Postgres"
+    "api",
+    "backend",
+    "hono",
+    "postgres",
+    "cloudflare",
+    "wrangler",
+    "drizzle",
+    "better-auth",
+    "resend"
   ],
   "author": {
     "name": "ImRayy",
@@ -19,8 +24,7 @@
   "scripts": {
     "type-check": "tsc --noEmit",
     "start": "bun src/index.js",
-    "dev": "NODE_ENV=development bun run --hot src/index.ts",
-    "dev:tunnel": "NODE_ENV=development bun run --env-file=.env.tunnel --host src/index.ts",
+    "dev": "NODE_ENV=development wrangler dev",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
     "lint:commit": "commitlint --edit"
@@ -31,6 +35,7 @@
     "drizzle-orm": "^0.43.1",
     "drizzle-zod": "^0.7.1",
     "hono": "^4.7.9",
+    "image-size": "^2.0.2",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "link-preview-js": "^3.0.15",
@@ -38,7 +43,6 @@
     "nanoid": "^5.1.5",
     "normalize-url": "^8.0.1",
     "resend": "^4.5.1",
-    "sharp": "^0.34.2",
     "tinycolor2": "^1.6.0",
     "tsuika-email-templates": "^0.0.4",
     "ws": "^8.18.2"
@@ -56,14 +60,12 @@
     "drizzle-seed": "^0.3.1",
     "lefthook": "^1.11.13",
     "postgres": "^3.4.5",
+    "wrangler": "^4.32.0",
     "zod": "^3.24.4"
   },
   "peerDependencies": {
     "@types/bun": "^1.2.13",
     "typescript": "^5.8.3"
   },
-  "trustedDependencies": [
-    "@biomejs/biome",
-    "lefthook"
-  ]
+  "trustedDependencies": ["@biomejs/biome", "lefthook"]
 }

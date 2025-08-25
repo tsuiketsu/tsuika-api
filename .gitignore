@@ -39,3 +39,7 @@ public/temp/*
 
 # Except .gitkeep in public/temp
 !public/temp/.gitkeep
+
+.infisical.json
+worker-configuration.d.ts
+.wrangler

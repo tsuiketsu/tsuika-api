@@ -1,12 +1,11 @@
 import * as orm from "drizzle-orm";
 import type { Context } from "hono";
-import type { Metadata } from "sharp";
 import { z } from "zod";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
-import { getImageMedatata } from "@/utils/image-metadata";
+import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";

@@ -1,4 +1,10 @@
-import sharp, { type Metadata } from "sharp";
+import { imageSize } from "image-size";
+
+export type Metadata = {
+  width: number;
+  height: number;
+  type?: string;
+};
 
 export const getImageMedatata = async (
   img: string,
@@ -13,8 +19,8 @@ export const getImageMedatata = async (
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    return await sharp(buffer).metadata();
-    // biome-ignore lint/suspicious/noExplicitAny: false
+    return imageSize(buffer);
+    // biome-ignore lint/suspicious/noExplicitAny: N/A
   } catch (error: any) {
     console.error("Failed to parse image metadata", error.message);
     return null;
