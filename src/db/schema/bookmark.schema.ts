@@ -71,8 +71,12 @@ export const bookmarkSelectSchema = createSelectSchema(bookmark, {
 
 export const bookmarkInsertSchema = createInsertSchema(bookmark, {
   folderId: z.string().optional(),
-  title: z.string().min(1, "Title is required").max(255).optional(),
-  // description: z.string().max(2000).optional(),
+  title: z
+    .string()
+    .max(255)
+    .transform((val) => (val.trim() === "" ? undefined : val))
+    .optional(),
+  description: z.string().optional(),
   url: z.string(),
   nonce: z.string().optional(),
   faviconUrl: z.string().optional(),
