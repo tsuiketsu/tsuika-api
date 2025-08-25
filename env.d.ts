@@ -12,5 +12,7 @@ declare namespace NodeJS {
     CORS_ORIGIN_BROWSER_EXTENSION: string;
     RESEND_API_KEY: string;
     JWT_SECRET: string;
+    LINK_METADATA_API_URL: string;
+    LINK_METADATA_API_KEY: string;
   }
 }
