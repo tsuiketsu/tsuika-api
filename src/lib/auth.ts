@@ -1,4 +1,5 @@
-import { betterAuth } from "better-auth";
+import bcrypt from "bcryptjs";
+import { betterAuth, type CookieOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, twoFactor, username } from "better-auth/plugins";
 import { RESERVED_USERNAMES, trustedOrigins } from "@/constants";
@@ -12,6 +13,12 @@ import {
   user,
   verification,
 } from "../db/schema/auth.schema";
+
+const cookieOpts: CookieOptions = {
+  httpOnly: true,
+  domain: `.${process.env.DOMAIN}`,
+  sameSite: "None",
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -32,6 +39,16 @@ export const auth = betterAuth({
       maxAge: 5 * 60,
     },
   },
+  advanced: {
+    cookies: {
+      session_token: {
+        attributes: cookieOpts,
+      },
+      session_data: {
+        attributes: cookieOpts,
+      },
+    },
+  },
   user: {
     changeEmail: {
       enabled: true,
@@ -48,15 +65,26 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     // requireEmailVerification: true,
+
+    // NOTE: Uncomment this if hosted on VPS, as I'm using cloudflare workers
+    // it's not possible to use bun
+    // password: {
+    //   hash: async (password) => {
+    //     return await Bun.password.hash(password, {
+    //       algorithm: "argon2id",
+    //       memoryCost: 19,
+    //     });
+    //   },
+    //   verify: async ({ password, hash }) => {
+    //     return await Bun.password.verify(password, hash);
+    //   },
+    // },
     password: {
       hash: async (password) => {
-        return await Bun.password.hash(password, {
-          algorithm: "argon2id",
-          memoryCost: 19,
-        });
+        return await bcrypt.hash(password, 10);
       },
       verify: async ({ password, hash }) => {
-        return await Bun.password.verify(password, hash);
+        return await bcrypt.compare(password, hash);
       },
     },
   },

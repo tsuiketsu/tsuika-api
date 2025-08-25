@@ -5,3 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [dev]
 port = 8000
+
+[[routes]]
+pattern = "api.tsuika.space"
+custom_domain = true

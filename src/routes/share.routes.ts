@@ -75,7 +75,7 @@ router.get("folder/:publicId", async (c) => {
 
     try {
       payload = jwt.verify(cookie, process.env.JWT_SECRET) as Payload;
-    } catch (error) {
+    } catch (_error) {
       throwError("UNAUTHORIZED", "Invalid or expired token", source);
     }
 
@@ -158,7 +158,7 @@ router.post("/folder/:publicId/unlock", async (c) => {
     console.log("running");
     isValid = await verifyHash(password, target.password!, target.salt!);
     console.log(isValid);
-  } catch (error) {
+  } catch (_error) {
     throwError("INTERNAL_ERROR", "Failed to verify password", source);
   }
 
@@ -174,7 +174,8 @@ router.post("/folder/:publicId/unlock", async (c) => {
     secure: true,
     httpOnly: true,
     maxAge: 60 * 60 * 1000,
-    sameSite: "Lax",
+    sameSite: "None",
+    domain: `.${process.env.DOMAIN}`,
   });
 
   return c.json({ success: true, message: "Folder unlocked!" }, 200);

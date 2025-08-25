@@ -25,6 +25,7 @@ export const fetchLinkPreview = async (
       message: "Successfully fetched link preview",
       data: response,
     };
+    // biome-ignore lint/suspicious/noExplicitAny: false
   } catch (error: any) {
     console.error(error);
 
