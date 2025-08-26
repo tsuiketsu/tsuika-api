@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import jwt from "jsonwebtoken";
 import { db } from "@/db";
+import { user } from "@/db/schema/auth.schema";
 import { bookmark } from "@/db/schema/bookmark.schema";
+import { folder } from "@/db/schema/folder.schema";
+import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import type { SuccessResponse } from "@/types";
@@ -15,37 +18,46 @@ const router = createRouter();
 // -----------------------------------------
 // GET SHARED FOLDER'S CONTENT (BOOKMARKS)
 // -----------------------------------------
-router.get("folder/:publicId", async (c) => {
+router.get(":username/folder/:publicId", async (c) => {
   const source = "share.folders.get";
 
-  const { publicId } = c.req.param();
+  const { username, publicId } = c.req.param();
 
   if (!publicId) {
     throwError("MISSING_PARAMETER", "publicId is required", source);
   }
 
-  const target = await db.query.sharedFolder.findFirst({
-    where: (sharedFolder, { eq }) => eq(sharedFolder.publicId, publicId),
-    columns: {
-      title: true,
-      note: true,
-      isPublic: true,
-      isLocked: true,
-      password: true,
-      salt: true,
-      expiresAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    with: {
-      folder: { columns: { id: true, name: true, description: true } },
-      author: { columns: { username: true, name: true } },
-    },
-  });
+  const response = await db
+    .select({
+      title: sharedFolder.title,
+      note: sharedFolder.title,
+      isPublic: sharedFolder.isPublic,
+      isLocked: sharedFolder.isLocked,
+      password: sharedFolder.password,
+      salt: sharedFolder.salt,
+      createdBy: sharedFolder.createdBy,
+      expiresAt: sharedFolder.expiresAt,
+      updatedAt: sharedFolder.updatedAt,
+      folder: {
+        id: folder.id,
+        name: folder.name,
+        description: folder.description,
+      },
+      author: {
+        username: user.username,
+        name: user.name,
+      },
+    })
+    .from(sharedFolder)
+    .innerJoin(folder, eq(folder.id, sharedFolder.folderId))
+    .innerJoin(user, eq(user.username, username))
+    .where(eq(sharedFolder.publicId, publicId));
 
-  if (!target) {
-    throwError("NOT_FOUND", `Folder with id ${publicId} not found`, source);
+  if (!response || response[0] == null) {
+    throwError("NOT_FOUND", "User or Folder not found", source);
   }
+
+  const target = response[0];
 
   if (!target.isPublic) {
     throwError("FORBIDDEN", "User unpublished this folder", source);
