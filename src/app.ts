@@ -2,6 +2,7 @@ import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { logger } from "hono/logger";
 import kebabCase from "lodash.kebabcase";
+import { trustedOrigins } from "./constants";
 import createApp from "./lib/create-app";
 import requireAuth from "./middlewares/require-auth.middleware";
 import addSession from "./middlewares/session.middleware";
@@ -25,7 +26,6 @@ app.use(
 );
 app.use("*", requireAuth);
 
-import { trustedOrigins } from "./constants";
 // Routes imports
 import * as allRoutes from "./routes";
 
