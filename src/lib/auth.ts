@@ -18,6 +18,7 @@ const cookieOpts: CookieOptions = {
   httpOnly: true,
   domain: `.${process.env.DOMAIN}`,
   sameSite: "None",
+  secure: true,
 };
 
 export const auth = betterAuth({
