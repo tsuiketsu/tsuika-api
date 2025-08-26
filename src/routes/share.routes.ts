@@ -1,3 +1,4 @@
+import type { CookieOptions } from "better-auth";
 import { eq } from "drizzle-orm";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import jwt from "jsonwebtoken";
@@ -14,6 +15,14 @@ import { verifyHash } from "@/utils/crypto";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();
+
+const cookieOpts: CookieOptions = {
+  secure: true,
+  httpOnly: true,
+  maxAge: 60 * 60 * 1000,
+  sameSite: "None",
+  domain: `.${process.env.DOMAIN}`,
+};
 
 // -----------------------------------------
 // GET SHARED FOLDER'S CONTENT (BOOKMARKS)
@@ -183,13 +192,7 @@ router.post("/folder/:publicId/unlock", async (c) => {
     expiresIn: "60m",
   });
 
-  setCookie(c, `unlock_${target.publicId}`, token, {
-    secure: true,
-    httpOnly: true,
-    maxAge: 60 * 60 * 1000,
-    sameSite: "None",
-    domain: `.${process.env.DOMAIN}`,
-  });
+  setCookie(c, `unlock_${target.publicId}`, token, cookieOpts);
 
   return c.json({ success: true, message: "Folder unlocked!" }, 200);
 });
@@ -204,7 +207,7 @@ router.post("/folder/:publicId/lock", async (c) => {
     throwError("REQUIRED_FIELD", "id is required", "share.folder.lock");
   }
 
-  deleteCookie(c, `unlock_${publicId}`);
+  deleteCookie(c, `unlock_${publicId}`, cookieOpts);
 
   return c.json<SuccessResponse<null>>(
     {
