@@ -37,6 +37,7 @@ router.get(":username/folder/:publicId", async (c) => {
       salt: sharedFolder.salt,
       createdBy: sharedFolder.createdBy,
       expiresAt: sharedFolder.expiresAt,
+      createdAt: sharedFolder.createdAt,
       updatedAt: sharedFolder.updatedAt,
       folder: {
         id: folder.id,
