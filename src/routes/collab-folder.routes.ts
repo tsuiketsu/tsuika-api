@@ -44,6 +44,7 @@ const insertSchema = z.object({
 
 router.post("/", zValidator("json", insertSchema), async (c) => {
   const source = "collab-folders.post";
+  const userId = await getUserId(c);
 
   const { folderPublicId, identifier, permissionLevel } = c.req.valid("json");
 
@@ -54,8 +55,15 @@ router.post("/", zValidator("json", insertSchema), async (c) => {
     throwError("NOT_FOUND", "User not found", source);
   }
 
+  if (sharedWithUser?.id === userId) {
+    throwError(
+      "CONFLICT",
+      "User cannot share with themselves (userId matches sharedWithUserId)",
+      source,
+    );
+  }
+
   // Get folder id
-  const userId = await getUserId(c);
   const folderId = await getFolderId(userId, folderPublicId);
 
   // Check if user already added to folder
