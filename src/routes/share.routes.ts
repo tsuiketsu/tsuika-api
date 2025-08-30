@@ -56,6 +56,7 @@ router.get(":username/folder/:publicId", async (c) => {
       author: {
         username: user.username,
         name: user.name,
+        image: user.image,
       },
     })
     .from(sharedFolder)
