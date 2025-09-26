@@ -29,7 +29,8 @@
     "cf-gen-types": "wrangler types --env-interface CloudflareBindings",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
-    "lint:commit": "commitlint --edit"
+    "lint:commit": "commitlint --edit",
+    "db:generate": "bun drizzle-kit generate --config=drizzle.config.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
