@@ -12,13 +12,13 @@ export const folder = pgTable("folders", {
     .references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
-  keyDerivation: jsonb("key_derivation"),
+  settings: jsonb("settings"),
   ...timestamps,
 });
 
 export const folderSelectSchema = createSelectSchema(folder, {
   id: z.string(),
-  keyDerivation: z.any(),
+  settings: z.any(),
 }).omit({
   publicId: true,
   userId: true,
@@ -30,14 +30,21 @@ export const folderInsertSchema = createInsertSchema(folder)
     description: true,
   })
   .extend({
-    keyDerivation: z
+    settings: z
       .object({
-        mac: z.string(),
-        salt: z.string(),
-        m: z.number().positive(),
-        p: z.number().positive(),
-        t: z.number().positive(),
-        dkLen: z.number().positive(),
+        defaultView: z.enum(["grid", "masonry", "compact"]).optional(),
+        isLinkPreview: z.boolean().optional(),
+        isEncrypted: z.boolean().optional(),
+        keyDerivation: z
+          .object({
+            mac: z.string(),
+            salt: z.string(),
+            m: z.number().positive(),
+            p: z.number().positive(),
+            t: z.number().positive(),
+            dkLen: z.number().positive(),
+          })
+          .optional(),
       })
       .optional(),
   });

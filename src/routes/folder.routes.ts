@@ -115,7 +115,7 @@ export const folderPublicFields = {
   description: folder.description,
   createdAt: folder.createdAt,
   updatedAt: folder.updatedAt,
-  keyDerivation: folder.keyDerivation,
+  settings: folder.settings,
 } as const;
 
 export const folderSelectPublicFields = {
@@ -260,10 +260,10 @@ router.post(
   zValidator("json", folderInsertSchema),
   validateFolderName,
   async (c) => {
-    const { name, description, keyDerivation } = c.req.valid("json");
+    const { name, description, settings } = c.req.valid("json");
 
-    if (keyDerivation) {
-      const missingFields = Object.entries(keyDerivation)
+    if (settings?.keyDerivation) {
+      const missingFields = Object.entries(settings.keyDerivation)
         .filter(([, value]) => value.toString() === "")
         .map(([key]) => key);
 
@@ -300,7 +300,7 @@ router.post(
         userId,
         name: name.trim(),
         description: description?.trim(),
-        keyDerivation,
+        settings,
       })
       .returning(folderPublicFields);
 
@@ -331,25 +331,27 @@ router.put(
     const source = "folders.post";
     const folderId = getFolderIdParam(c);
 
-    const { name, description } = c.req.valid("json");
+    const { name, description, settings } = c.req.valid("json");
 
-    const { name: folderName, description: folderDesc } =
-      await verifyFolderExistance(folderId);
+    await verifyFolderExistance(folderId);
 
-    if (folderName === name.trim() && folderDesc === description?.trim()) {
-      throwError("CONFLICT", "Folder name/description are same", source);
-    }
+    const data = await db.execute(sql`
+        UPDATE folders
+        SET name = ${name.trim()},
+            description = ${description?.trim()},
+            settings = settings || ${settings},
+            updated_at = NOW()
+        WHERE folders.public_id = ${folderId}
+        RETURNING 
+            folders.public_id AS id,
+            folders.name as name,
+            folders.description as description,
+            folders.created_at as createdAt,
+            folders.updated_at as updatedAt,
+            folders.settings as settings;
+    `);
 
-    const data = await db
-      .update(folder)
-      .set({
-        name: name.trim(),
-        description: description?.trim(),
-      })
-      .where(eq(folder.publicId, folderId))
-      .returning(folderPublicFields);
-
-    if (data.length === 0 || data[0] == null) {
+    if (data.rows.length === 0 || data.rows[0] == null) {
       throwError("INTERNAL_ERROR", "Failed to update folder", source);
     }
 
@@ -357,7 +359,7 @@ router.put(
       {
         success: true,
         message: "Successfully updated folder",
-        data: data[0],
+        data: data.rows[0] as FolderType,
       },
       200,
     );
