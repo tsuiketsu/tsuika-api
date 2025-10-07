@@ -1,19 +1,32 @@
 import type { Context, Next } from "hono";
+import type { RequestHeader } from "hono/utils/headers";
 import { throwError } from "@/errors/handlers";
 
-const blockDemoHostMiddleware = async (c: Context, next: Next) => {
-  const host = c.req.header("Origin");
-  const isGet = c.req.method === "GET";
+const errorText = "middleware:block_demo_host";
+const ignoreList = ["/api/auth/sign-in", "/api/auth/sign-out"];
+const allowedMethods = ["GET", "OPTIONS"];
+const allowedAuthMethods = [...allowedMethods, "POST"];
 
-  if ((!host || host?.includes("demo")) && !isGet) {
-    throwError(
-      "FORBIDDEN",
-      "This is a read-only demo of Tsuika, so this action isn’t available.",
-      "middleware:block_demo_host",
-    );
+const blockDemoHostMiddleware = async (c: Context, next: Next) => {
+  const header = (str: RequestHeader) => c.req.header(str);
+
+  const origin = header("Origin") || header("Referer") || header("Host");
+  const path = c.req.path;
+  const method = c.req.method;
+
+  const isAuthPath = ignoreList.some((route) => path.includes(route));
+  const isOriginDemo = !origin || origin.toLowerCase()?.includes("demo");
+
+  if (isOriginDemo && isAuthPath && !allowedAuthMethods.includes(method)) {
+    const messsage = `Method ${method} is not allowed on demo auth routes.`;
+    throwError("FORBIDDEN", messsage, errorText);
   }
 
-  return next();
+  if (isOriginDemo && !isAuthPath && !allowedMethods.includes(method)) {
+    throwError("FORBIDDEN", "Read-only demo: action disabled.", errorText);
+  }
+
+  await next();
 };
 
 export default blockDemoHostMiddleware;
