@@ -4,8 +4,10 @@ import { logger } from "hono/logger";
 import kebabCase from "lodash.kebabcase";
 import { trustedOrigins } from "./constants";
 import createApp from "./lib/create-app";
+import blockDemoHostMiddleware from "./middlewares/block-demo-host.middleware";
 import requireAuth from "./middlewares/require-auth.middleware";
 import addSession from "./middlewares/session.middleware";
+import * as allRoutes from "./routes";
 
 const app = createApp();
 
@@ -24,11 +26,10 @@ app.use(
     credentials: true,
   }),
 );
+app.use("*", blockDemoHostMiddleware);
 app.use("*", requireAuth);
 
-// Routes imports
-import * as allRoutes from "./routes";
-
+// ROUTES
 const { auth, authData, share, ...routes } = allRoutes;
 
 app.route("/api", auth);
