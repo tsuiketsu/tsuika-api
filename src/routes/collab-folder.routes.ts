@@ -170,12 +170,16 @@ router.patch(
   async (c) => {
     const source = "collab-folders.patch";
     const userId = await getUserId(c);
+    const folderId = await getFolderId(userId, c.req.param("folderPublicId"));
 
     // Check  user's authorization level
     const selectedCollabFolder = await db.query.collabFolder.findFirst({
-      where: or(
-        eq(cFolder.ownerUserId, userId),
-        eq(cFolder.sharedWithUserId, userId),
+      where: and(
+        eq(cFolder.folderId, folderId),
+        or(
+          eq(cFolder.ownerUserId, userId),
+          eq(cFolder.sharedWithUserId, userId),
+        ),
       ),
       columns: { ownerUserId: true, permissionLevel: true },
     });
@@ -184,6 +188,7 @@ router.patch(
       selectedCollabFolder?.ownerUserId !== userId &&
       selectedCollabFolder?.permissionLevel !== "admin"
     ) {
+      console.log(selectedCollabFolder);
       throwError(
         "UNAUTHORIZED",
         "Only owner or admins can change other user's permissions",
