@@ -416,6 +416,55 @@ router.get("/total-count", async (c) => {
 });
 
 // -----------------------------------------
+// GET ALL BOOKMARK URLS
+// -----------------------------------------
+router.get("/urls", async (c) => {
+  const folderPublicId = c.req.query("folderId");
+  const successMessage = "Successfully fetched urls";
+  const errorMessage = "Failed to fetch urls";
+  const source = "bookmarks.get";
+  const userId = await getUserId(c);
+
+  type ReturnType = SuccessResponse<{ urls: string[] }>;
+
+  if (folderPublicId) {
+    const folderInfo = await getFolderInfo(folderPublicId, userId);
+
+    if (folderInfo?.id) {
+      const bookmarks = await db.query.bookmark.findMany({
+        where: orm.eq(bookmark.folderId, folderInfo.id),
+        columns: { url: true },
+      });
+
+      if (!bookmarks || bookmarks.length === 0) {
+        return throwError("INTERNAL_ERROR", errorMessage, source);
+      }
+
+      return c.json<ReturnType>({
+        success: true,
+        data: { urls: bookmarks.map((b) => b.url) },
+        message: successMessage,
+      });
+    }
+  }
+
+  const bookmarks = await db.query.bookmark.findMany({
+    where: orm.eq(bookmark.userId, userId),
+    columns: { url: true },
+  });
+
+  if (!bookmarks || bookmarks.length === 0) {
+    return throwError("INTERNAL_ERROR", errorMessage, source);
+  }
+
+  return c.json<ReturnType>({
+    success: true,
+    data: { urls: bookmarks.map((b) => b.url) },
+    message: successMessage,
+  });
+});
+
+// -----------------------------------------
 // GET ALL BOOKMARKS OR QUERY BY PARAM
 // -----------------------------------------
 // FIX: Maybe include collaborative folder's bookmarks
