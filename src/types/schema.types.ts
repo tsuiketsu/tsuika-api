@@ -1,12 +1,10 @@
 import { z } from "zod";
-import type { profileSelectSchema } from "@/db/schema/profile.schema";
 import type { bookmarkTaskSelectSchema } from "@/db/schema/task.schema";
 import type { bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import type { bookmarkTagSelectSchema } from "../db/schema/bookmark-tag.schema";
 import type { folderSelectSchema } from "../db/schema/folder.schema";
 import type { tagSelectSchema } from "../db/schema/tag.schema";
 
-export type ProfileType = z.infer<typeof profileSelectSchema>;
 export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
 export type TagType = z.infer<typeof tagSelectSchema>;
 
