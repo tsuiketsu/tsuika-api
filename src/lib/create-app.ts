@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import type { auth } from "./auth";
 
 export type AuthType = {
@@ -9,7 +9,7 @@ export type AuthType = {
 };
 
 export function createRouter() {
-  return new Hono<AuthType>({
+  return new OpenAPIHono<AuthType>({
     strict: false,
   });
 }

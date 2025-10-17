@@ -37,7 +37,21 @@ app.route("/api", authData);
 app.route("/api/public", share);
 
 for (const [key, value] of Object.entries(routes)) {
-  app.basePath("/api/v1").route(`/${kebabCase(key)}s`, value);
+  app.route(`/api/v1/${kebabCase(key)}s`, value);
 }
+
+app.doc("/openapi.json", {
+  openapi: "3.1.0",
+  info: {
+    version: "1.0.0",
+    title: "Tsuika",
+  },
+  servers: [
+    {
+      url: "http://localhost:8000",
+      description: "Local development",
+    },
+  ],
+});
 
 export { app };
