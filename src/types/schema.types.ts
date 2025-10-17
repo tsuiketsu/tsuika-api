@@ -10,6 +10,13 @@ export type ProfileType = z.infer<typeof profileSelectSchema>;
 export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
 export type TagType = z.infer<typeof tagSelectSchema>;
 
+export const bookmarkFlags = {
+  isPinned: "pin",
+  isArchived: "archive",
+  isFavourite: "favorite",
+};
+export type BookmarkFlag = keyof typeof bookmarkFlags;
+
 export type BookmarkTagType = z.infer<typeof bookmarkTagSelectSchema>;
 export const bookmarkTagInsertSchema = z.object({
   bookmarkId: z.number(),

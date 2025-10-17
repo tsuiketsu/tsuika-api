@@ -6,6 +6,14 @@ export const trustedOrigins = [
   process.env.CORS_ORIGIN_BROWSER_EXTENSION,
   process.env.CORS_ORIGIN_HOPPSCOTCH,
 ];
+export const ORDER_TYPES = ["asc", "desc"];
+export const BOOKMARK_FILTERS = [
+  "pinned",
+  "archived",
+  "favorites",
+  "unsorted",
+  "encrypted",
+];
 export const RESERVED_USERNAMES = [
   // 🔒 Admin/System Roles
   "admin",

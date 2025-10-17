@@ -1,69 +1,42 @@
 import * as orm from "drizzle-orm";
-import type { Context } from "hono";
-import { z } from "zod";
+import { BOOKMARK_FILTERS } from "@/constants";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
+import {
+  addBookmarksToFolder,
+  createBookmark,
+  deleteBookmarkById,
+  deleteBookmarkInBulk,
+  getBookmarkById,
+  getBookmarkByTagId,
+  getBookmarks,
+  getBookmarksByFolderId,
+  getBookmarkUrls,
+  getTotalBookmarksCount,
+  tooggleBookmarkFlag,
+  updateBookmark,
+  updateBookmarkThumbnail,
+} from "@/openapi/routes/bookmark";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
 import { db } from "../db";
-import {
-  bookmark,
-  bookmarkInsertSchema,
-  bookmarkSelectSchema,
-} from "../db/schema/bookmark.schema";
+import { bookmark, bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
-import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
-import type { BookmarkType } from "../types/schema.types";
+import { type BookmarkType, bookmarkFlags } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId, pick } from "../utils";
 import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
-import { zValidator } from "../utils/validator-wrapper";
 import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
 
 const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
-};
-
-const setBookmarkFlag = async (
-  c: Context,
-  field: "isPinned" | "isArchived" | "isFavourite",
-) => {
-  const source = "bookmarks.patch";
-  const { state } = await c.req.json();
-  const publicId = c.req.param("id");
-  const userId = await getUserId(c);
-
-  if (!publicId) {
-    throwError("MISSING_PARAMETER", "Bookmark ID is required", "bookmarks.get");
-  }
-
-  if (state == null) {
-    throwError("REQUIRED_FIELD", "State is required", source);
-  }
-
-  // Check if user authorized to changing anything related to bookmark
-  await verifyUserAccessByBookmark(publicId, userId);
-
-  const result = await db
-    .update(bookmark)
-    .set({ [field]: state })
-    .where(orm.eq(bookmark.publicId, publicId));
-
-  if (result.rowCount === 0) {
-    throwError("DATABASE_ERROR", `Failed to change ${field} state`, source);
-  }
-
-  return c.json<SuccessResponse>(
-    { success: true, message: `Successfully set ${field} state` },
-    200,
-  );
 };
 
 const authorizeAndFetchFolderId = async (
@@ -90,7 +63,7 @@ const authorizeAndFetchFolderId = async (
 const getFilterCondition = (
   query: Record<string, string | undefined>,
 ): orm.SQL<unknown> => {
-  const flags = ["pinned", "archived", "favorites", "unsorted", "encrypted"];
+  const flags = BOOKMARK_FILTERS;
 
   if (query?.filter && !flags.includes(query?.filter)) {
     throwError(
@@ -252,7 +225,7 @@ export const bookmarkPublicFields = {
 // -----------------------------------------
 // ADD NEW BOOKMARK
 // -----------------------------------------
-router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
+router.openapi(createBookmark, async (c) => {
   const source = "bookmarks.post";
 
   const {
@@ -295,7 +268,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 
     if (!siteMeta.data) {
       console.error(
-        `Fialed to fetch metadata of url ${url}`,
+        `Failed to fetch metadata of url ${url}`,
         siteMeta.message || "",
       );
     }
@@ -373,7 +346,8 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
   }
 
   const { publicId, ...rest } = data[0];
-  return c.json<SuccessResponse<BookmarkType>>(
+
+  return c.json(
     {
       success: true,
       message: "Bookmark added successfully 🔖",
@@ -392,7 +366,7 @@ router.post("/", zValidator("json", bookmarkInsertSchema), async (c) => {
 // GET TOTAL BOOKMARKS COUNT
 // -----------------------------------------
 // FIX: Maybe include collaborative folder's bookmarks
-router.get("/total-count", async (c) => {
+router.openapi(getTotalBookmarksCount, async (c) => {
   const condition = getFilterCondition(c.req.query());
   const userId = await getUserId(c);
 
@@ -405,7 +379,7 @@ router.get("/total-count", async (c) => {
     throwError("NOT_FOUND", "No bookmarks found", "bookmarks.get");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>(
+  return c.json(
     {
       success: true,
       data: { total: data[0].count },
@@ -418,14 +392,12 @@ router.get("/total-count", async (c) => {
 // -----------------------------------------
 // GET ALL BOOKMARK URLS
 // -----------------------------------------
-router.get("/urls", async (c) => {
+router.openapi(getBookmarkUrls, async (c) => {
   const folderPublicId = c.req.query("folderId");
   const successMessage = "Successfully fetched urls";
   const errorMessage = "Failed to fetch urls";
   const source = "bookmarks.get";
   const userId = await getUserId(c);
-
-  type ReturnType = SuccessResponse<{ urls: string[] }>;
 
   if (folderPublicId) {
     const folderInfo = await getFolderInfo(folderPublicId, userId);
@@ -437,15 +409,20 @@ router.get("/urls", async (c) => {
       });
 
       if (!bookmarks || bookmarks.length === 0) {
-        return throwError("INTERNAL_ERROR", errorMessage, source);
+        throwError("INTERNAL_ERROR", errorMessage, source);
       }
 
-      return c.json<ReturnType>({
-        success: true,
-        data: { urls: bookmarks.map((b) => b.url) },
-        message: successMessage,
-      });
+      return c.json(
+        {
+          success: true,
+          data: { urls: bookmarks.map((b) => b.url) },
+          message: successMessage,
+        },
+        200,
+      );
     }
+
+    throwError("INTERNAL_ERROR", errorMessage, source);
   }
 
   const bookmarks = await db.query.bookmark.findMany({
@@ -454,66 +431,69 @@ router.get("/urls", async (c) => {
   });
 
   if (!bookmarks || bookmarks.length === 0) {
-    return throwError("INTERNAL_ERROR", errorMessage, source);
+    throwError("INTERNAL_ERROR", errorMessage, source);
   }
 
-  return c.json<ReturnType>({
-    success: true,
-    data: { urls: bookmarks.map((b) => b.url) },
-    message: successMessage,
-  });
+  return c.json(
+    {
+      success: true,
+      data: { urls: bookmarks.map((b) => b.url) },
+      message: successMessage,
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
 // GET ALL BOOKMARKS OR QUERY BY PARAM
 // -----------------------------------------
 // FIX: Maybe include collaborative folder's bookmarks
-router.get("/", async (c) => {
+router.openapi(getBookmarks, async (c) => {
   const source = "bookmarks.get";
-  const queryUrl = c.req.query("url");
   const userId = await getUserId(c);
 
   // Fetch bookmarks by url if query param given
-  if (queryUrl && queryUrl.trim() !== "") {
-    const data = await db.query.bookmark.findFirst({
-      where: orm.and(
-        orm.eq(bookmark.userId, userId),
-        orm.ilike(bookmark.url, `%${queryUrl}%`),
-      ),
-      with: bookmarkJoins,
-    });
-
-    if (!data) {
-      const errMsg = `Bookmark with url "${queryUrl}" not found`;
-      throwError("NOT_FOUND", errMsg, source);
-    }
-
-    const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
-      ...tag,
-      appliedAt,
-    }));
-
-    const updatedData = {
-      ...data,
-      tags,
-    };
-
-    const { bookmarkFolder, publicId, ...rest } = updatedData;
-
-    return c.json<SuccessResponse<BookmarkType>>(
-      {
-        success: true,
-        data: {
-          ...rest,
-          id: publicId,
-          folderId: bookmarkFolder?.publicId,
-          tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
-        },
-        message: `Successfully fetched bookmark with url ${queryUrl}`,
-      },
-      200,
-    );
-  }
+  // const queryUrl = c.req.query("url");
+  // if (queryUrl && queryUrl.trim() !== "") {
+  //   const data = await db.query.bookmark.findFirst({
+  //     where: orm.and(
+  //       orm.eq(bookmark.userId, userId),
+  //       orm.ilike(bookmark.url, `%${queryUrl}%`),
+  //     ),
+  //     with: bookmarkJoins,
+  //   });
+  //
+  //   if (!data) {
+  //     const errMsg = `Bookmark with url "${queryUrl}" not found`;
+  //     throwError("NOT_FOUND", errMsg, source);
+  //   }
+  //
+  //   const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
+  //     ...tag,
+  //     appliedAt,
+  //   }));
+  //
+  //   const updatedData = {
+  //     ...data,
+  //     tags,
+  //   };
+  //
+  //   const { bookmarkFolder, publicId, ...rest } = updatedData;
+  //
+  //   return c.json<SuccessResponse<BookmarkType>>(
+  //     {
+  //       success: true,
+  //       data: {
+  //         ...rest,
+  //         id: publicId,
+  //         folderId: bookmarkFolder?.publicId,
+  //         tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
+  //       },
+  //       message: `Successfully fetched bookmark with url ${queryUrl}`,
+  //     },
+  //     200,
+  //   );
+  // }
 
   // Fetch all bookmarks with pagination if `url` param not found
   const condition = getFilterCondition(c.req.query());
@@ -547,7 +527,7 @@ router.get("/", async (c) => {
     throwError("NOT_FOUND", "No bookmarks found", source);
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched all bookmarks",
@@ -560,7 +540,7 @@ router.get("/", async (c) => {
           id: tag.publicId,
           appliedAt,
         })),
-      })),
+      })) as BookmarkType[],
       pagination: {
         page,
         limit,
@@ -576,7 +556,7 @@ router.get("/", async (c) => {
 // GET BOOKMARKS BY TAG PUBLIC ID
 // -----------------------------------------
 // FIX: Maybe include collaborative folder's bookmarks
-router.get("/tag/:publicId", async (c) => {
+router.openapi(getBookmarkByTagId, async (c) => {
   const userId = await getUserId(c);
   const publicId = c.req.param("publicId");
 
@@ -630,7 +610,7 @@ router.get("/tag/:publicId", async (c) => {
     );
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+  return c.json(
     {
       success: true,
       data: data as BookmarkType[],
@@ -649,7 +629,7 @@ router.get("/tag/:publicId", async (c) => {
 // -----------------------------------------
 // GET BOOKMARKS BY FOLDER ID
 // -----------------------------------------
-router.get("/folder/:id", async (c) => {
+router.openapi(getBookmarksByFolderId, async (c) => {
   const source = "bookmarks.get";
   const folderId = c.req.param("id");
   const userId = await getUserId(c);
@@ -738,7 +718,7 @@ router.get("/folder/:id", async (c) => {
     throwError("NOT_FOUND", "No bookmarks exists in the folder", source);
   }
 
-  return c.json<PaginatedSuccessResponse<BookmarkType[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched all bookmarks",
@@ -766,7 +746,7 @@ router.get("/folder/:id", async (c) => {
 // -----------------------------------------
 // GET BOOKMARK BY ID
 // -----------------------------------------
-router.get("/:id", async (c) => {
+router.openapi(getBookmarkById, async (c) => {
   const source = "bookmarks.get";
   const userId = await getUserId(c);
 
@@ -803,7 +783,7 @@ router.get("/:id", async (c) => {
 
   const { bookmarkFolder, publicId, ...rest } = updatedData;
 
-  return c.json<SuccessResponse<BookmarkType>>(
+  return c.json(
     {
       success: true,
       data: {
@@ -821,7 +801,7 @@ router.get("/:id", async (c) => {
 // -----------------------------------------
 // UPDATE BOOKMARK
 // -----------------------------------------
-router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
+router.openapi(updateBookmark, async (c) => {
   const source = "bookmarks.put";
   const userId = await getUserId(c);
   const publicId = c.req.param("id");
@@ -907,7 +887,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     .returning(bookmarkPublicFields);
 
   if (data.length === 0 || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to updated bookmark", source);
+    throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
   }
 
   // Insert tags if found
@@ -921,7 +901,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
     tagsInserted = await insertTags(userId, prev.id, tagIds);
   }
 
-  return c.json<SuccessResponse<BookmarkType>>(
+  return c.json(
     {
       success: true,
       message: "Bookmark updated successfully 🔖",
@@ -938,7 +918,7 @@ router.put(":id", zValidator("json", bookmarkInsertSchema), async (c) => {
 // -----------------------------------------
 // DELETE BOOKMARKS IN BULK
 // -----------------------------------------
-router.delete("/bulk", async (c) => {
+router.openapi(deleteBookmarkInBulk, async (c) => {
   const source = "bookmarks.delete";
   const userId = await getUserId(c);
   const { bookmarkIds } = await c.req.json();
@@ -959,7 +939,7 @@ router.delete("/bulk", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
   }
 
-  return c.json<SuccessResponse<string[]>>(
+  return c.json(
     {
       success: true,
       data: data.map((item) => item.deletedBookmarkId),
@@ -972,7 +952,7 @@ router.delete("/bulk", async (c) => {
 // -----------------------------------------
 // DELETE BOOKMARK
 // -----------------------------------------
-router.delete(":id", async (c) => {
+router.openapi(deleteBookmarkById, async (c) => {
   const source = "bookmarks.delete";
   const userId = await getUserId(c);
 
@@ -988,16 +968,20 @@ router.delete(":id", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
   }
 
-  return c.json({
-    success: true,
-    message: "Successfully deleted bookmark 🔖",
-  });
+  return c.json(
+    {
+      success: true,
+      data: null,
+      message: "Successfully deleted bookmark 🔖",
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
 // UPDATE BOOKMARK THUMBNAIL
 // -----------------------------------------
-router.patch(":id/thumbnail", async (c) => {
+router.openapi(updateBookmarkThumbnail, async (c) => {
   const source = "bookmarks.patch";
   const userId = await getUserId(c);
 
@@ -1019,7 +1003,7 @@ router.patch(":id/thumbnail", async (c) => {
   if (!thumbnail || !thumbnail.fileId) {
     throwError(
       "THIRD_PARTY_SERVICE_FAILED",
-      thumbnail.message || "Failed to updated thumbnail",
+      thumbnail.message || "Failed to update thumbnail",
       source,
     );
   }
@@ -1057,7 +1041,7 @@ router.patch(":id/thumbnail", async (c) => {
     await deleteFromImageKit(prevThumbnail.thumbnail);
   }
 
-  return c.json<SuccessResponse<{ thumbnail: string }>>(
+  return c.json(
     {
       success: true,
       message: "Successfully updated thumbnail",
@@ -1072,57 +1056,89 @@ router.patch(":id/thumbnail", async (c) => {
 // -----------------------------------------
 // ADD BOOKMARKS TO A FOLDER IN BULK
 // -----------------------------------------
-const bulkAssignSchema = z.object({
-  bookmarkIds: z.array(z.string()),
-});
+router.openapi(addBookmarksToFolder, async (c) => {
+  const source = "bookmarks.patch";
+  const folderId = c.req.param("folderId");
 
-router.patch(
-  "/folder/:folderId/bulk-assign-folder",
-  zValidator("json", bulkAssignSchema),
-  async (c) => {
-    const source = "bookmarks.patch";
-    const folderId = c.req.param("folderId");
+  if (!folderId) {
+    throwError("MISSING_PARAMETER", "folderId  required", "bookmarks.patch");
+  }
 
-    if (!folderId) {
-      throwError("MISSING_PARAMETER", "folderId  required", "bookmarks.patch");
-    }
+  const { bookmarkIds } = c.req.valid("json");
 
-    const { bookmarkIds } = c.req.valid("json");
-
-    if (bookmarkIds.length === 0) {
-      throwError("INVALID_PARAMETER", "bookmarkIds are empty", source);
-    }
-
-    const userId = await getUserId(c);
-    const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
-
-    const data = await db
-      .update(bookmark)
-      .set({
-        folderId: folderRowId,
-      })
-      .where(orm.inArray(bookmark.publicId, bookmarkIds));
-
-    if (!data) {
-      throwError("DATABASE_ERROR", "Failed to add bookmarks to folder", source);
-    }
-
-    return c.json<SuccessResponse<null>>(
-      {
-        success: true,
-        data: null,
-        message: `Bookmarks added to selected folder with id ${folderId}`,
-      },
-      200,
+  if (bookmarkIds.length === 0) {
+    throwError(
+      "INVALID_PARAMETER",
+      "Atleast one bookmarkId is required",
+      source,
     );
-  },
-);
+  }
+
+  const userId = await getUserId(c);
+  const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
+
+  const data = await db
+    .update(bookmark)
+    .set({
+      folderId: folderRowId,
+    })
+    .where(orm.inArray(bookmark.publicId, bookmarkIds));
+
+  if (!data) {
+    throwError("INTERNAL_ERROR", "Failed to add bookmarks to folder", source);
+  }
+
+  return c.json(
+    {
+      success: true,
+      data: null,
+      message: `Bookmarks added to selected folder with id ${folderId}`,
+    },
+    200,
+  );
+});
 
 // -----------------------------------------
 // TOGGLE BOOKMARK PIN, FAVORITE, ARCHIVE
 // -----------------------------------------
-router.patch(":id/pin", (c) => setBookmarkFlag(c, "isPinned"));
-router.patch(":id/favorite", (c) => setBookmarkFlag(c, "isFavourite"));
-router.patch(":id/archive", (c) => setBookmarkFlag(c, "isArchived"));
+router.openapi(tooggleBookmarkFlag, async (c) => {
+  const source = "bookmarks.patch";
+  const { state } = c.req.valid("json");
+  const publicId = c.req.param("id");
+  const flag = c.req.param("flag");
+  const userId = await getUserId(c);
+
+  if (!publicId || !flag) {
+    throwError("MISSING_PARAMETER", "id or flag is missing", "bookmarks.get");
+  }
+
+  if (!Object.values(bookmarkFlags).includes(flag)) {
+    throwError("INVALID_PARAMETER", "Invalid bookmark flag", "bookmarks.get");
+  }
+
+  if (state == null) {
+    throwError("REQUIRED_FIELD", "State is required", source);
+  }
+
+  // Check if user authorized to changing anything related to bookmark
+  await verifyUserAccessByBookmark(publicId, userId);
+
+  const result = await db
+    .update(bookmark)
+    .set({ [flag]: state })
+    .where(orm.eq(bookmark.publicId, publicId));
+
+  if (result.rowCount === 0) {
+    throwError("INTERNAL_ERROR", `Failed to change ${flag} state`, source);
+  }
+
+  return c.json(
+    {
+      success: true,
+      message: "Successfully set flag",
+    },
+    200,
+  );
+});
 
 export default router;
