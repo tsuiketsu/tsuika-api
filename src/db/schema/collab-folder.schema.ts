@@ -23,10 +23,16 @@ export const collabFolder = pgTable(
   {
     id: bigserial({ mode: "number" }).primaryKey(),
     publicId: text().unique(),
-    folderId: integer().references(() => folder.id, { onDelete: "cascade" }),
-    ownerUserId: text().references(() => user.id, { onDelete: "set null" }),
-    sharedWithUserId: text().references(() => user.id, { onDelete: "cascade" }),
-    permissionLevel: permissionLevel().default("viewer"),
+    folderId: integer()
+      .notNull()
+      .references(() => folder.id, { onDelete: "cascade" }),
+    ownerUserId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "set null" }),
+    sharedWithUserId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    permissionLevel: permissionLevel().notNull().default("viewer"),
     ...timestamps,
   },
   (table) => [unique().on(table.folderId, table.sharedWithUserId)],

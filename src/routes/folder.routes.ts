@@ -3,30 +3,33 @@ import type { Context, Next } from "hono";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
+import {
+  createFolder,
+  deleteFolder,
+  getAllFolders,
+  getCollabFolders,
+  getFolders,
+  getTotalFoldersCount,
+  updateFolder,
+} from "@/openapi/routes/folders";
 import { generatePublicId } from "@/utils/nanoid";
 import { db } from "../db";
-import { folder, folderInsertSchema } from "../db/schema/folder.schema";
+import { folder } from "../db/schema/folder.schema";
 import { createRouter } from "../lib/create-app";
-import createFieldValidator from "../middlewares/validate-name.middleware";
-import type { PaginatedSuccessResponse, SuccessResponse } from "../types";
 import type { FolderType } from "../types/schema.types";
 import { getPagination, getUserId, pick } from "../utils";
-import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
 
-const validateFolderName = createFieldValidator({
-  fieldName: "name",
-  maxLength: 50,
-  get errorMessages() {
-    return {
-      maxLength: `Name exceeds the max allowed length of ${this.maxLength} characters`,
-    };
-  },
-  errorCodes: {
-    maxLength: "FOLDER_NAME_TOO_LONG",
-  },
-});
+const validateFolderName = async (name: string, source: string) => {
+  if (name.trim().length > 50) {
+    throwError(
+      "INVALID_INPUT",
+      "Name exceeds the max allowed length of 50 characters",
+      source,
+    );
+  }
+};
 
 const getFolderIdParam = (c: Context): string => {
   const folderId = c.req.param("id");
@@ -132,7 +135,7 @@ export const folderSelectPublicFields = {
 // -----------------------------------------
 // GET ALL FOLDERS
 // -----------------------------------------
-router.get("/all", async (c) => {
+router.openapi(getAllFolders, async (c) => {
   const userId = await getUserId(c);
 
   const data = await db
@@ -152,7 +155,7 @@ router.get("/all", async (c) => {
     );
   }
 
-  return c.json<SuccessResponse<Pick<FolderType, "id" | "name">[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched folders",
@@ -165,7 +168,7 @@ router.get("/all", async (c) => {
 // -----------------------------------------
 // GET TOTAL FOLDERS COUNT
 // -----------------------------------------
-router.get("/total-count", async (c) => {
+router.openapi(getTotalFoldersCount, async (c) => {
   const userId = await getUserId(c);
 
   const data = await db
@@ -177,7 +180,7 @@ router.get("/total-count", async (c) => {
     throwError("NOT_FOUND", "No folders found", "FOLDER_NOT_FOUND");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>(
+  return c.json(
     {
       success: true,
       data: { total: data[0].count },
@@ -190,7 +193,7 @@ router.get("/total-count", async (c) => {
 // -----------------------------------------
 // GET FOLDERS
 // -----------------------------------------
-router.get("/", async (c) => {
+router.openapi(getFolders, async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
 
   const folderIds = new URL(c.req.url).searchParams.getAll("id");
@@ -228,7 +231,7 @@ router.get("/", async (c) => {
     );
   }
 
-  return c.json<PaginatedSuccessResponse<FolderType[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched folders",
@@ -255,87 +258,79 @@ router.get("/", async (c) => {
 // -----------------------------------------
 // ADD NEW FOLDER
 // -----------------------------------------
-router.post(
-  "/",
-  zValidator("json", folderInsertSchema),
-  validateFolderName,
-  async (c) => {
-    const { name, description, settings } = c.req.valid("json");
+router.openapi(createFolder, async (c) => {
+  const source = "folders.post";
+  const { name, description, settings } = c.req.valid("json");
 
-    if (settings?.keyDerivation) {
-      const missingFields = Object.entries(settings.keyDerivation)
-        .filter(([, value]) => value.toString() === "")
-        .map(([key]) => key);
+  void (await validateFolderName(name, source));
 
-      if (missingFields.length > 0) {
-        throwError(
-          "MISSING_PARAMETER",
-          `Missing: ${missingFields.join(", ")}`,
-          "folders.post",
-        );
-      }
-    }
+  if (settings?.keyDerivation) {
+    const missingFields = Object.entries(settings.keyDerivation)
+      .filter(([, value]) => value.toString() === "")
+      .map(([key]) => key);
 
-    const userId = await getUserId(c);
-
-    const doesFolderExists = await db.query.folder.findFirst({
-      where: and(
-        eq(folder.userId, userId),
-        eq(folder.name, name.toLowerCase().trim()),
-      ),
-    });
-
-    if (doesFolderExists) {
+    if (missingFields.length > 0) {
       throwError(
-        "CONFLICT",
-        `Folder with name ${name} already exists`,
-        "folders.post",
+        "MISSING_PARAMETER",
+        `Missing: ${missingFields.join(", ")}`,
+        source,
       );
     }
+  }
 
-    const data = await db
-      .insert(folder)
-      .values({
-        publicId: generatePublicId(),
-        userId,
-        name: name.trim(),
-        description: description?.trim(),
-        settings,
-      })
-      .returning(folderPublicFields);
+  const userId = await getUserId(c);
 
-    if (data.length === 0 || data[0] == null) {
-      throwError("INTERNAL_ERROR", "Failed to add folder", "folders.post");
-    }
+  const doesFolderExists = await db.query.folder.findFirst({
+    where: and(
+      eq(folder.userId, userId),
+      eq(folder.name, name.toLowerCase().trim()),
+    ),
+  });
 
-    return c.json<SuccessResponse<FolderType>>(
-      {
-        success: true,
-        data: data[0],
-        message: "Successfully added folder",
-      },
-      200,
-    );
-  },
-);
+  if (doesFolderExists) {
+    throwError("CONFLICT", `Folder with name ${name} already exists`, source);
+  }
+
+  const data = await db
+    .insert(folder)
+    .values({
+      publicId: generatePublicId(),
+      userId,
+      name: name.trim(),
+      description: description?.trim(),
+      settings,
+    })
+    .returning(folderPublicFields);
+
+  if (data.length === 0 || data[0] == null) {
+    throwError("INTERNAL_ERROR", "Failed to add folder", "folders.post");
+  }
+
+  return c.json(
+    {
+      success: true,
+      data: data[0],
+      message: "Successfully added folder",
+    },
+    200,
+  );
+});
 
 // -----------------------------------------
 // UPDATE FOLDER
 // -----------------------------------------
-router.put(
-  ":id",
-  zValidator("json", folderInsertSchema),
-  validateFolderName,
-  verifyUserAuthorization,
-  async (c) => {
-    const source = "folders.post";
-    const folderId = getFolderIdParam(c);
+router.openapi(updateFolder, async (c) => {
+  const source = "folders.post";
+  const folderId = getFolderIdParam(c);
 
-    const { name, description, settings } = c.req.valid("json");
+  const { name, description, settings } = c.req.valid("json");
 
-    await verifyFolderExistance(folderId);
+  void (await validateFolderName(name, source));
 
-    const data = await db.execute(sql`
+  // FIX: This causing slow query, give better error
+  await verifyFolderExistance(folderId);
+
+  const data = await db.execute(sql`
         UPDATE folders
         SET name = ${name.trim()},
             description = ${description?.trim()},
@@ -351,25 +346,24 @@ router.put(
             folders.settings as settings;
     `);
 
-    if (data.rows.length === 0 || data.rows[0] == null) {
-      throwError("INTERNAL_ERROR", "Failed to update folder", source);
-    }
+  if (data.rows.length === 0 || data.rows[0] == null) {
+    throwError("INTERNAL_ERROR", "Failed to update folder", source);
+  }
 
-    return c.json<SuccessResponse<FolderType>>(
-      {
-        success: true,
-        message: "Successfully updated folder",
-        data: data.rows[0] as FolderType,
-      },
-      200,
-    );
-  },
-);
+  return c.json(
+    {
+      success: true,
+      message: "Successfully updated folder",
+      data: data.rows[0] as FolderType,
+    },
+    200,
+  );
+});
 
 // -----------------------------------------
 // DELETE FOLDER
 // -----------------------------------------
-router.delete(":id", async (c) => {
+router.openapi(deleteFolder, async (c) => {
   const folderId = getFolderIdParam(c);
   const userId = await getUserId(c);
 
@@ -384,7 +378,7 @@ router.delete(":id", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to delete folder", "folders.delete");
   }
 
-  return c.json<SuccessResponse<FolderType>>(
+  return c.json(
     {
       success: true,
       message: "Successfully deleted selected folder",
@@ -395,12 +389,13 @@ router.delete(":id", async (c) => {
 });
 
 // -----------------------------------------
-// GET FOLDERS
+// GET COLLABORATIVE FOLDERS
 // -----------------------------------------
-router.get("/collborative", async (c) => {
+router.openapi(getCollabFolders, async (c) => {
   const userId = await getUserId(c);
+  const source = "folders.get";
 
-  const data = await db.query.collabFolder.findMany({
+  const collabFolders = await db.query.collabFolder.findMany({
     where: (f, { eq }) => eq(f.sharedWithUserId, userId),
     with: {
       folder: true,
@@ -417,11 +412,22 @@ router.get("/collborative", async (c) => {
     },
   });
 
-  return c.json<SuccessResponse<unknown>>({
-    success: true,
-    message: "Successfully fetched all shared folders",
-    data,
-  });
+  if (!collabFolders) {
+    throwError("INTERNAL_ERROR", "Failed to fetch folders", source);
+  }
+
+  if (collabFolders && collabFolders.length === 0) {
+    throwError("NOT_FOUND", "Folders not found", source);
+  }
+
+  return c.json(
+    {
+      success: true,
+      message: "Successfully fetched all shared folders",
+      data: collabFolders,
+    },
+    200,
+  );
 });
 
 export default router;

@@ -1,4 +1,5 @@
-import type { z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
+import { ALLOWED_METHODS } from "@/constants";
 import type { ErrorCodeKey } from "@/errors/types";
 import { addExamples } from "@/utils/zod-utils";
 import { errorSchema, paginationSchema, successSchema } from "./common/schema";
@@ -59,4 +60,21 @@ export function createUnauthorizedByRoleObject(source: string) {
     code: "UNAUTHORIZED",
     source,
   });
+}
+
+export function createIdParamSchema(key: string) {
+  return z.object({
+    [key]: z.string().openapi({
+      param: {
+        name: key,
+        in: "path",
+      },
+    }),
+  });
+}
+
+export function createSources(text: string) {
+  return Object.fromEntries(
+    ALLOWED_METHODS.map((v) => [v, `${text}/${v.toLowerCase()}`]),
+  ) as Record<Lowercase<(typeof ALLOWED_METHODS)[number]>, string>;
 }

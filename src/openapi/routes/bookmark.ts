@@ -14,6 +14,8 @@ import { addExamples } from "@/utils/zod-utils";
 import { paginationQuerySchema } from "../common/schema";
 import {
   createErrorObject,
+  createIdParamSchema,
+  createSources,
   createSuccessObject,
   createUnauthorizedByRoleObject,
   jsonContentRequired,
@@ -22,13 +24,7 @@ import { generateFakerNanoid, generateFakerNanoids } from "../utils";
 
 const tags = ["Bookmarks"];
 
-const sources = {
-  get: "bookmarks.get",
-  post: "bookmarks.post",
-  put: "bookmarks.put",
-  delete: "bookmarks.delete",
-  patch: "bookmarks.patch",
-};
+const sources = createSources("bookmarks");
 
 const SelectSchema = addExamples(
   bookmarkSelectSchema,
@@ -53,16 +49,6 @@ const InsertSchema = bookmarkInsertSchema.omit({
   createdAt: true,
   updatedAt: true,
 });
-
-const createIdParamSchema = (key: string) =>
-  z.object({
-    [key]: z.string().openapi({
-      param: {
-        name: key,
-        in: "path",
-      },
-    }),
-  });
 
 // -----------------------------------------
 // ADD NEW BOOKMARK

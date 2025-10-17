@@ -8,6 +8,7 @@ import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import { getFolderId } from "@/lib/folder.utils";
 import type { SuccessResponse } from "@/types";
+import { FolderPermissionLevelSchema } from "@/types/schema.types";
 import { getUserId, omit } from "@/utils";
 import { generatePublicId } from "@/utils/nanoid";
 import { zValidator } from "@/utils/validator-wrapper";
@@ -39,7 +40,7 @@ const getUserByIdentifier = async (identifier: string) => {
 const insertSchema = z.object({
   identifier: z.string(),
   folderPublicId: z.string(),
-  permissionLevel: z.enum(["viewer", "editor", "admin"]),
+  permissionLevel: FolderPermissionLevelSchema,
 });
 
 router.post("/", zValidator("json", insertSchema), async (c) => {

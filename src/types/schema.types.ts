@@ -24,6 +24,11 @@ export const bookmarkTagInsertSchema = z.object({
 });
 
 export type FolderType = z.infer<typeof folderSelectSchema>;
+export const FolderPermissionLevelSchema = z.enum([
+  "viewer",
+  "editor",
+  "admin",
+]);
 
 // Task Types
 export type Task = z.infer<typeof bookmarkTaskSelectSchema> & {

@@ -2,7 +2,7 @@ import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { logger } from "hono/logger";
 import kebabCase from "lodash.kebabcase";
-import { trustedOrigins } from "./constants";
+import { ALLOWED_METHODS, trustedOrigins } from "./constants";
 import createApp from "./lib/create-app";
 import blockDemoHostMiddleware from "./middlewares/block-demo-host.middleware";
 import requireAuth from "./middlewares/require-auth.middleware";
@@ -20,7 +20,7 @@ app.use(
   cors({
     origin: trustedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "PUT", "PATCH", "OPTIONS", "DELETE"],
+    allowMethods: ALLOWED_METHODS.map((s) => s), // converts readonly[] to string[]
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
     credentials: true,
