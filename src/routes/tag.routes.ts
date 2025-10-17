@@ -3,19 +3,21 @@ import type { Context } from "hono";
 import kebabCase from "lodash.kebabcase";
 import tinycolor from "tinycolor2";
 import { throwError } from "@/errors/handlers";
+import {
+  createTag,
+  deleteTag,
+  getAllTags,
+  getTotalTagsCount,
+  searchTag,
+  updateTag,
+} from "@/openapi/routes/tag";
 import { generatePublicId } from "@/utils/nanoid";
 import { db } from "../db";
-import { tag, tagInsertSchema, tagUpdateSchema } from "../db/schema/tag.schema";
+import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
-import {
-  type OrderDirection,
-  orderDirections,
-  type PaginatedSuccessResponse,
-  type SuccessResponse,
-} from "../types";
+import { type OrderDirection, orderDirections } from "../types";
 import type { TagType } from "../types/schema.types";
 import { getPagination, getUserId } from "../utils";
-import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
 
@@ -50,7 +52,7 @@ const tagPublicFields = {
 // -----------------------------------------
 // ADD NEW TAG
 // -----------------------------------------
-router.post("/", zValidator("json", tagInsertSchema), async (c) => {
+router.openapi(createTag, async (c) => {
   const source = "tags.post";
   const userId = await getUserId(c);
 
@@ -78,7 +80,7 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
     throwError("INTERNAL_ERROR", "Failed to add tag", source);
   }
 
-  return c.json<SuccessResponse<TagType>>(
+  return c.json(
     {
       success: true,
       message: "Successfully added tag",
@@ -91,7 +93,7 @@ router.post("/", zValidator("json", tagInsertSchema), async (c) => {
 // -----------------------------------------
 // GET TOTAL TAGS COUNT
 // -----------------------------------------
-router.get("/total-count", async (c) => {
+router.openapi(getTotalTagsCount, async (c) => {
   const userId = await getUserId(c);
 
   const data = await db
@@ -103,7 +105,7 @@ router.get("/total-count", async (c) => {
     throwError("NOT_FOUND", "No tags found", "tags.get");
   }
 
-  return c.json<SuccessResponse<{ total: number }>>(
+  return c.json(
     {
       success: true,
       data: { total: data[0].count },
@@ -116,7 +118,7 @@ router.get("/total-count", async (c) => {
 // -----------------------------------------
 // GET ALL TAGS
 // -----------------------------------------
-router.get("/", async (c) => {
+router.openapi(getAllTags, async (c) => {
   const userId = await getUserId(c);
   const orderBy = c.req.query("orderBy")?.toLowerCase() as OrderDirection;
 
@@ -145,7 +147,7 @@ router.get("/", async (c) => {
     throwError("NOT_FOUND", "No tags found", "tags.get");
   }
 
-  return c.json<PaginatedSuccessResponse<Omit<TagType, "userId">[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched all tags",
@@ -168,7 +170,7 @@ router.get("/", async (c) => {
 // -----------------------------------------
 // SEARCH TAG
 // -----------------------------------------
-router.get("/search", async (c) => {
+router.openapi(searchTag, async (c) => {
   const userId = await getUserId(c);
 
   const id = c.req.query("id");
@@ -177,7 +179,6 @@ router.get("/search", async (c) => {
   if (!(name || id)) {
     throwError(
       "MISSING_PARAMETER",
-
       "Missing required parameter: either `name` or `id` must be provided. " +
         "If both are provided, `id` will take priority.",
       "tags.get",
@@ -218,12 +219,10 @@ router.get("/search", async (c) => {
     throwError("NOT_FOUND", "Tag not found", "tags.get");
   }
 
-  console.log(data);
-
-  return c.json<SuccessResponse<TagType[]>>(
+  return c.json(
     {
       success: true,
-      message: "Successfully fetched tag",
+      message: "Successfully fetched tags",
       data: data as TagType[],
     },
     200,
@@ -233,7 +232,7 @@ router.get("/search", async (c) => {
 // -----------------------------------------
 // UPDATE TAG
 // -----------------------------------------
-router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
+router.openapi(updateTag, async (c) => {
   const { name, color } = c.req.valid("json");
 
   const userId = await getUserId(c);
@@ -253,7 +252,7 @@ router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
     throwError("INTERNAL_ERROR", "Failed to update tag", "tags.put");
   }
 
-  return c.json<SuccessResponse<TagType>>(
+  return c.json(
     {
       success: true,
       message: "Successfully updated tag",
@@ -266,7 +265,7 @@ router.put(":id", zValidator("json", tagUpdateSchema), async (c) => {
 // -----------------------------------------
 // DELETE TAG
 // -----------------------------------------
-router.delete(":id", async (c) => {
+router.openapi(deleteTag, async (c) => {
   const userId = await getUserId(c);
   const tagId = await getTagId(c);
 
@@ -278,10 +277,7 @@ router.delete(":id", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to delete tag", "tags.delete");
   }
 
-  return c.json<SuccessResponse>(
-    { success: true, message: "Successfully deleted tag" },
-    200,
-  );
+  return c.json({ success: true, message: "Successfully deleted tag" }, 200);
 });
 
 export default router;

@@ -1,6 +1,7 @@
 import { faker } from "@faker-js/faker";
 import type z from "zod";
 import type { folderInsertSchema } from "@/db/schema/folder.schema";
+import type { tagSelectSchema } from "@/db/schema/tag.schema";
 import { generateFakerNanoid } from "../utils";
 
 export const tags = [
@@ -58,3 +59,14 @@ export const folderExamples: z.infer<typeof folderInsertSchema> & {
     },
   },
 };
+
+export const tagExamples: z.infer<typeof tagSelectSchema>[] = Array.from({
+  length: 3,
+}).map(() => ({
+  id: generateFakerNanoid(),
+  color: faker.color.rgb(),
+  name: faker.word.adjective(),
+  useCount: faker.number.int({ min: 0, max: 1000 }),
+  createdAt: faker.date.past(),
+  updatedAt: faker.date.recent(),
+}));
