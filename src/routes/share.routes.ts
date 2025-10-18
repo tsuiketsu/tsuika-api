@@ -9,7 +9,11 @@ import { folder } from "@/db/schema/folder.schema";
 import { sharedFolder } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
-import type { SuccessResponse } from "@/types";
+import {
+  getSharedFolderContent,
+  lockSharedFolder,
+  unlockSharedFolder,
+} from "@/openapi/routes/share";
 import { omit } from "@/utils";
 import { verifyHash } from "@/utils/crypto";
 import { bookmarkPublicFields } from "./bookmark.routes";
@@ -27,8 +31,8 @@ const cookieOpts: CookieOptions = {
 // -----------------------------------------
 // GET SHARED FOLDER'S CONTENT (BOOKMARKS)
 // -----------------------------------------
-router.get(":username/folder/:publicId", async (c) => {
-  const source = "share.folders.get";
+router.openapi(getSharedFolderContent, async (c) => {
+  const source = "share-folders.get";
 
   const { username, publicId } = c.req.param();
 
@@ -132,7 +136,7 @@ router.get(":username/folder/:publicId", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to fetch folder's data", source);
   }
 
-  return c.json<SuccessResponse<unknown>>(
+  return c.json(
     {
       success: true,
       data: Object.assign(
@@ -152,7 +156,7 @@ router.get(":username/folder/:publicId", async (c) => {
 // -----------------------------------------
 // UNLOCK SHARED FOLDER IF LOCKED
 // -----------------------------------------
-router.post("/folder/:publicId/unlock", async (c) => {
+router.openapi(unlockSharedFolder, async (c) => {
   const source = "share.folder.unlock";
   const publicId = c.req.param("publicId");
 
@@ -201,7 +205,7 @@ router.post("/folder/:publicId/unlock", async (c) => {
 // -----------------------------------------
 // LOCK SHARED FOLDER
 // -----------------------------------------
-router.post("/folder/:publicId/lock", async (c) => {
+router.openapi(lockSharedFolder, async (c) => {
   const publicId = c.req.param("publicId");
 
   if (!publicId) {
@@ -210,7 +214,7 @@ router.post("/folder/:publicId/lock", async (c) => {
 
   deleteCookie(c, `unlock_${publicId}`, cookieOpts);
 
-  return c.json<SuccessResponse<null>>(
+  return c.json(
     {
       success: true,
       data: null,
