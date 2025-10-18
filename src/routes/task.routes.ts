@@ -1,25 +1,24 @@
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 import { db } from "@/db";
 import { bookmark } from "@/db/schema/bookmark.schema";
-import {
-  bookmarkTask,
-  bookmarkTaskInsertSchema,
-} from "@/db/schema/task.schema";
+import { bookmarkTask } from "@/db/schema/task.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
-import type { PaginatedSuccessResponse, SuccessResponse } from "@/types";
+import {
+  createTask,
+  deleteTask,
+  getAllTasks,
+  setTaskStatus,
+  updateTask,
+} from "@/openapi/routes/task";
 import {
   type ContentCategoryType,
   contentCategoryTypes as cat,
   contentCategoryTypes,
-  type Task,
   TaskStatus,
-  type TaskType,
 } from "@/types/schema.types";
 import { getPagination, getUserId, pick } from "@/utils";
 import { generatePublicId } from "@/utils/nanoid";
-import { zValidator } from "@/utils/validator-wrapper";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();
@@ -78,13 +77,7 @@ export const contentPublicFields = {
 // -----------------------------------------
 // INSERT TASK
 // -----------------------------------------
-const insertSchema = bookmarkTaskInsertSchema.extend({
-  type: z.enum(
-    Object.values(cat) as [ContentCategoryType, ...ContentCategoryType[]],
-  ),
-});
-
-router.post("/:id", zValidator("json", insertSchema), async (c) => {
+router.openapi(createTask, async (c) => {
   const { priority, note, remindAt: reminderDate, type } = c.req.valid("json");
 
   const contentPublicId = c.req.param("id");
@@ -107,14 +100,22 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
 
   const data = await db
     .insert(bookmarkTask)
-    .values({ publicId, userId, note, remindAt, priority, contentId })
+    .values({
+      publicId,
+      userId,
+      note,
+      remindAt,
+      // biome-ignore lint/suspicious/noExplicitAny: false
+      priority: priority as any,
+      contentId,
+    })
     .returning(selectPublicFields);
 
   if (!data || data[0] == null) {
     throwError("INTERNAL_ERROR", "Failed to add task", "tasks.post");
   }
 
-  return c.json<SuccessResponse<Task>>(
+  return c.json(
     {
       success: true,
       data: { ...data[0], type },
@@ -127,7 +128,7 @@ router.post("/:id", zValidator("json", insertSchema), async (c) => {
 // -----------------------------------------
 // GET ALL TASKS
 // -----------------------------------------
-router.get("/", async (c) => {
+router.openapi(getAllTasks, async (c) => {
   const { page, limit, offset } = getPagination(c.req.query());
   const userId = await getUserId(c);
 
@@ -146,7 +147,7 @@ router.get("/", async (c) => {
     throwError("NOT_FOUND", "Tasks not found", "tasks.get");
   }
 
-  return c.json<PaginatedSuccessResponse<Task[]>>(
+  return c.json(
     {
       success: true,
       message: "Successfully fetched tasks",
@@ -168,7 +169,7 @@ router.get("/", async (c) => {
 // -----------------------------------------
 // UPDATE TASK
 // -----------------------------------------
-router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
+router.openapi(updateTask, async (c) => {
   const { note, remindAt: remindAtStr, priority } = c.req.valid("json");
   const userId = await getUserId(c);
 
@@ -190,7 +191,8 @@ router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
 
   const data = await db
     .update(bookmarkTask)
-    .set({ note, remindAt, priority })
+    // biome-ignore lint/suspicious/noExplicitAny: false
+    .set({ note, remindAt, priority: priority as any })
     .where(and(whereUserId(userId), wherePublicId(publicId)))
     .returning(selectPublicFields);
 
@@ -198,11 +200,11 @@ router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
     throwError(
       "INTERNAL_ERROR",
       `Failed to update task with id "${publicId}"`,
-      "tasks.get",
+      "tasks.put",
     );
   }
 
-  return c.json<SuccessResponse<TaskType>>(
+  return c.json(
     {
       success: true,
       data: data[0],
@@ -215,7 +217,7 @@ router.put("/:id", zValidator("json", bookmarkTaskInsertSchema), async (c) => {
 // -----------------------------------------
 // SET TASK STATUS
 // -----------------------------------------
-router.patch("/:id", async (c) => {
+router.openapi(setTaskStatus, async (c) => {
   const publicId = c.req.param("id");
 
   if (!publicId) {
@@ -246,17 +248,20 @@ router.patch("/:id", async (c) => {
     throwError("INTERNAL_ERROR", "Failed to set status of task", "tasks.patch");
   }
 
-  return c.json<SuccessResponse<{ id: string; status: TaskStatus }>>({
-    success: true,
-    data: { ...data[0], status: data[0].status as TaskStatus },
-    message: `Successfully set task status to ${status}`,
-  });
+  return c.json(
+    {
+      success: true,
+      data: data[0],
+      message: `Successfully set task status to ${status}`,
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
 // DELETE TASK
 // -----------------------------------------
-router.delete("/:id", async (c) => {
+router.openapi(deleteTask, async (c) => {
   const publicId = c.req.param("id");
 
   if (!publicId) {
@@ -280,11 +285,15 @@ router.delete("/:id", async (c) => {
     );
   }
 
-  return c.json<SuccessResponse<{ deletedId: string }>>({
-    success: true,
-    data: data[0],
-    message: `Successfully deleted task with id "${publicId}"`,
-  });
+  return c.json(
+    {
+      success: true,
+      // NOTE: This is unnecessary, remove if frontend not using this
+      data: data[0],
+      message: `Successfully deleted task with id "${publicId}"`,
+    },
+    200,
+  );
 });
 
 export default router;
