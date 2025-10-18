@@ -3,6 +3,12 @@ import { db } from "@/db";
 import { user } from "@/db/schema/auth.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
+import {
+  getAuthDataSession,
+  getAuthDataUser,
+  UserEditableSchema,
+  updateAuthDateUser,
+} from "@/openapi/routes/auth-data";
 import type { ImageKitReponse, SuccessResponse } from "@/types";
 import { getUserId } from "@/utils";
 import { deleteFromImageKit, uploadOnImageKit } from "@/utils/imagekit";
@@ -12,16 +18,19 @@ const router = createRouter();
 // -----------------------------------------
 // GET USER SESSION
 // -----------------------------------------
-router.get("/session", async (c) => {
+router.openapi(getAuthDataSession, async (c) => {
   const session = c.get("session");
   const user = c.get("user");
 
-  if (!user) return c.body(null, 401);
+  if (!user) return c.json(null, 401);
 
-  return c.json({
-    session,
-    user,
-  });
+  return c.json(
+    {
+      session,
+      user,
+    },
+    200,
+  );
 });
 
 router.get("/verification-email/:id", async (c) => {
@@ -58,7 +67,7 @@ router.get("/verification-email/:id", async (c) => {
 // -----------------------------------------
 // GET USER PROFILE
 // -----------------------------------------
-router.get("/user", async (c) => {
+router.openapi(getAuthDataUser, async (c) => {
   const userId = await getUserId(c);
 
   const response = await db.query.user.findFirst({
@@ -74,18 +83,21 @@ router.get("/user", async (c) => {
     throwError("INTERNAL_ERROR", "Profile not found", "users.get");
   }
 
-  return c.json<SuccessResponse<unknown>>({
-    success: true,
-    data: { ...response, image: response.image?.split("|")[1] },
-    message: "Successfully fetched profile",
-  });
+  return c.json(
+    {
+      success: true,
+      data: { ...response, image: response.image?.split("|")[1] },
+      message: "Successfully fetched profile",
+    },
+    200,
+  );
 });
 
 // -----------------------------------------
 // UPDATE NAME, USERNAME, IMAGE
 // -----------------------------------------
-router.patch("/user", async (c) => {
-  const source = "users.put";
+router.openapi(updateAuthDateUser, async (c) => {
+  const source = "users.patch";
   const userId = await getUserId(c);
 
   const { name, username, image } = await c.req.parseBody();
@@ -115,15 +127,18 @@ router.patch("/user", async (c) => {
 
   const response = await db.execute(sql`
     WITH old_data AS (
-      SELECT id,image FROM auth.users WHERE id = ${userId}
+      SELECT id, name, username, image
+      FROM auth.users 
+      WHERE id = ${userId}
     )
     UPDATE auth.users
-    SET username = ${(username as string) ?? null},
-        name = ${(name as string) ?? null},
-        image = COALESCE(${newImage}, old_data.image)
+    SET
+       username = COALESCE(${username ?? null}, old_data.username),
+       name = COALESCE(${name ?? null}, old_data.name),
+       image = COALESCE(${newImage ?? null}, old_data.image)
     FROM old_data
     WHERE auth.users.id = old_data.id
-    RETURNING 
+    RETURNING
       auth.users.name as name,
       auth.users.username as username,
       auth.users.image as image_url,
@@ -144,14 +159,17 @@ router.patch("/user", async (c) => {
     fileId && (await deleteFromImageKit(fileId));
   }
 
-  return c.json<SuccessResponse<unknown>>({
-    success: true,
-    data: {
-      ...response.rows[0],
-      image: newImageUri.split("|")[1],
+  return c.json(
+    {
+      success: true,
+      data: UserEditableSchema.parse({
+        ...response.rows[0],
+        image: newImageUri.split("|")[1],
+      }),
+      message: "Successfully updated profile",
     },
-    message: "Successfully updated profile",
-  });
+    200,
+  );
 });
 
 export default router;

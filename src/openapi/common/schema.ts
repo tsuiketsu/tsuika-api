@@ -33,3 +33,25 @@ export const successSchema = z.object({
     example: "Successfully fetched urls",
   }),
 });
+
+export const sessionSchema = z.object({
+  id: z.string(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+  userId: z.coerce.string(),
+  expiresAt: z.date(),
+  token: z.string(),
+  ipAddress: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
+});
+
+export const userSchema = z.object({
+  id: z.string(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+  email: z.string().transform((val) => val.toLowerCase().trim()),
+  emailVerified: z.boolean().default(false),
+  name: z.string(),
+  username: z.string().optional().nullable(),
+  image: z.string().nullable().optional(),
+});
