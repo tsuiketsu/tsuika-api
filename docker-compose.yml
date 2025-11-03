@@ -1,4 +1,17 @@
 services:
+  minio:
+    image: minio/minio:latest
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      # - MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}
+    command: server /data --console-address ":9001"
+    ports:
+      - 9000:9000
+      - 9001:9001
+
   postgres:
     image: postgres:17-alpine
     command: "-d 1"
@@ -17,4 +30,7 @@ services:
       retries: 5
 
 volumes:
+  minio-data:
   db_data:
+  tsuika-object-storage:
+    name: "tsuika-object-storage"
