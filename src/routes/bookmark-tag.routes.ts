@@ -1,22 +1,21 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { throwError } from "@/errors/handlers";
+import {
+  createBookmarkTags,
+  removeBookmarkTags,
+} from "@/openapi/routes/bookmark-tag";
 import { db } from "../db";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { createRouter } from "../lib/create-app";
-import type { SuccessResponse } from "../types";
-import {
-  type BookmarkTagType,
-  bookmarkTagInsertSchema,
-} from "../types/schema.types";
+import type { BookmarkTagType } from "../types/schema.types";
 import { getUserId } from "../utils";
-import { zValidator } from "../utils/validator-wrapper";
 
 const router = createRouter();
 
 // -----------------------------------------
 // ADD BOOKMARK TAGS
 // -----------------------------------------
-router.post("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
+router.openapi(createBookmarkTags, async (c) => {
   const { tagIds, bookmarkId } = c.req.valid("json");
 
   if (!bookmarkId || !tagIds || tagIds.length === 0) {
@@ -49,7 +48,7 @@ router.post("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
     );
   }
 
-  return c.json<SuccessResponse<BookmarkTagType[]>>(
+  return c.json(
     {
       success: true,
       data,
@@ -62,12 +61,12 @@ router.post("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
 // -----------------------------------------
 // REMOVE BOOKMARK TAGS
 // -----------------------------------------
-router.delete("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
+router.openapi(removeBookmarkTags, async (c) => {
   const { tagIds, bookmarkId } = c.req.valid("json");
 
   if (!bookmarkId || !tagIds || tagIds.length === 0) {
     throwError(
-      "REQUIRED_FIELD",
+      "MISSING_PARAMETER",
       "bookmarkId and at least one tagId are required.",
       "bookmark-tags.delete",
     );
@@ -94,7 +93,7 @@ router.delete("/", zValidator("json", bookmarkTagInsertSchema), async (c) => {
     );
   }
 
-  return c.json<SuccessResponse<BookmarkTagType[]>>(
+  return c.json(
     {
       success: true,
       data,

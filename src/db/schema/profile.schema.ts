@@ -14,10 +14,13 @@ export const profile = pgTable("profiles", {
   ...timestamps,
 });
 
-export const profileSelectSchema = createSelectSchema(profile).omit({
+export const profileSelectSchema = createSelectSchema(profile, {
+  preferencesJson: () => z.object({}),
+}).omit({
   userId: true,
 });
 
 export const profileInsertSchema = createInsertSchema(profile, {
   userId: z.string().optional(),
+  preferencesJson: z.object({}),
 });

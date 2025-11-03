@@ -98,14 +98,14 @@ export const bookmarkInsertSchema = createInsertSchema(bookmark, {
         new URL(data.url);
       } catch (_error) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: "Must be a valid URL",
           path: ["url"],
         });
       }
     } else if (!data.nonce) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "nonce is required",
         path: ["nonce"],
       });

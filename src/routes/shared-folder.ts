@@ -1,24 +1,22 @@
 import { and, eq, sql } from "drizzle-orm";
-import type { z } from "zod";
 import { db } from "@/db";
-import {
-  sharedFolder as sf,
-  sharedFolderInsertSchema,
-  type sharedFolderSelectSchema,
-  sharedFolderUpdateSchema,
-} from "@/db/schema/shared-folder.schema";
+import { sharedFolder as sf } from "@/db/schema/shared-folder.schema";
 import { throwError } from "@/errors/handlers";
 import { createRouter } from "@/lib/create-app";
 import { getFolderId } from "@/lib/folder.utils";
-import type { SuccessResponse } from "@/types";
+import {
+  getSharedFolderInfo,
+  insertIntoSharedFolders,
+  unpublishSharedFolder,
+  updateSharedFolder,
+} from "@/openapi/routes/share";
 import { getUserId } from "@/utils";
 import { hashPassword } from "@/utils/crypto";
 import { generatePublicId } from "@/utils/nanoid";
-import { zValidator } from "@/utils/validator-wrapper";
 
 const router = createRouter();
 
-const sharedFolderPublicFields = {
+export const sharedFolderPublicFields = {
   id: sf.publicId,
   title: sf.title,
   note: sf.note,
@@ -55,7 +53,7 @@ async function getHashedPassword(
 // -----------------------------------------
 // INSERT INTO SHARED-FOLDERS | SHARE FOLDER
 // -----------------------------------------
-router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
+router.openapi(insertIntoSharedFolders, async (c) => {
   const source = "shared-folder.post";
 
   const { folderId, title, note, expiresAt, isLocked, password } =
@@ -108,7 +106,7 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
     throwError("INTERNAL_ERROR", "Failed to make folder public", source);
   }
 
-  return c.json<SuccessResponse<unknown>>(
+  return c.json(
     {
       success: true,
       data: data[0],
@@ -121,58 +119,58 @@ router.post("/", zValidator("json", sharedFolderInsertSchema), async (c) => {
 // -----------------------------------------
 // UPDATE SHARED FOLDER
 // -----------------------------------------
-router.put(
-  "/:publicId",
-  zValidator("json", sharedFolderUpdateSchema),
-  async (c) => {
-    const source = "shared-folder.put";
-    const publicId = c.req.param("publicId");
-    const userId = await getUserId(c);
+router.openapi(updateSharedFolder, async (c) => {
+  const source = "shared-folder.put";
+  const publicId = c.req.param("publicId");
+  const userId = await getUserId(c);
 
-    const { title, note, isLocked, password, expiresAt } = c.req.valid("json");
+  if (!publicId) {
+    throwError("MISSING_PARAMETER", "publicId is missing", source);
+  }
 
-    let passwordHash = null;
-    let passwordSalt = null;
+  const { title, note, isLocked, password, expiresAt } = c.req.valid("json");
 
-    if (password && isLocked) {
-      const { hash, salt } = await getHashedPassword(password, source);
-      passwordHash = hash;
-      passwordSalt = salt;
-    }
+  let passwordHash = null;
+  let passwordSalt = null;
 
-    const result = await db
-      .update(sf)
-      .set({
-        title,
-        note,
-        isLocked,
-        expiresAt,
-        password: passwordHash,
-        salt: passwordSalt,
-        updatedAt: sql`NOW()`,
-      })
-      .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)))
-      .returning(sharedFolderPublicFields);
+  if (password && isLocked) {
+    const { hash, salt } = await getHashedPassword(password, source);
+    passwordHash = hash;
+    passwordSalt = salt;
+  }
 
-    if (!result || result[0] == null) {
-      throwError("INTERNAL_ERROR", "Failed to update folder", source);
-    }
+  const result = await db
+    .update(sf)
+    .set({
+      title,
+      note,
+      isLocked,
+      expiresAt,
+      password: passwordHash,
+      salt: passwordSalt,
+      updatedAt: sql`NOW()`,
+    })
+    .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)))
+    .returning(sharedFolderPublicFields);
 
-    return c.json<SuccessResponse<z.infer<typeof sharedFolderSelectSchema>>>(
-      {
-        success: true,
-        message: "Successfully updated shared-folder",
-        data: result[0],
-      },
-      200,
-    );
-  },
-);
+  if (!result || result[0] == null) {
+    throwError("INTERNAL_ERROR", "Failed to update folder", source);
+  }
+
+  return c.json(
+    {
+      success: true,
+      message: "Successfully updated shared-folder",
+      data: result[0],
+    },
+    200,
+  );
+});
 
 // -----------------------------------------
 // GET SHARED FOLDER INFO
 // -----------------------------------------
-router.get("/:publicId", async (c) => {
+router.openapi(getSharedFolderInfo, async (c) => {
   const source = "shared-folders.get";
   const publicId = c.req.param("publicId");
 
@@ -187,11 +185,11 @@ router.get("/:publicId", async (c) => {
     .from(sf)
     .where(and(eq(sf.createdBy, userId), eq(sf.publicId, publicId)));
 
-  if (!data) {
+  if (!data || data[0] == null) {
     throwError("INTERNAL_ERROR", "Failed to fetch shared-folder info", source);
   }
 
-  return c.json<SuccessResponse<unknown>>(
+  return c.json(
     {
       success: true,
       data: data[0],
@@ -204,9 +202,14 @@ router.get("/:publicId", async (c) => {
 // -----------------------------------------
 // UN-PUBLISH FOLDER
 // -----------------------------------------
-router.patch("/:publicId/unpublish", async (c) => {
+router.openapi(unpublishSharedFolder, async (c) => {
   const publicId = c.req.param("publicId");
   const userId = await getUserId(c);
+  const source = "shared-folders.patch";
+
+  if (!publicId) {
+    throwError("MISSING_PARAMETER", "publicId is missing", source);
+  }
 
   const data = await db
     .update(sf)
@@ -221,14 +224,10 @@ router.patch("/:publicId/unpublish", async (c) => {
     });
 
   if (!data || data[0] == null) {
-    throwError(
-      "INTERNAL_ERROR",
-      "Failed to un-publish folder",
-      "shared-folders.patch",
-    );
+    throwError("INTERNAL_ERROR", "Failed to un-publish folder", source);
   }
 
-  return c.json<SuccessResponse<{ id: string }>>(
+  return c.json(
     {
       success: true,
       data: data[0],

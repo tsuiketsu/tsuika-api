@@ -1,14 +1,19 @@
 import { z } from "zod";
-import type { profileSelectSchema } from "@/db/schema/profile.schema";
 import type { bookmarkTaskSelectSchema } from "@/db/schema/task.schema";
 import type { bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import type { bookmarkTagSelectSchema } from "../db/schema/bookmark-tag.schema";
 import type { folderSelectSchema } from "../db/schema/folder.schema";
 import type { tagSelectSchema } from "../db/schema/tag.schema";
 
-export type ProfileType = z.infer<typeof profileSelectSchema>;
 export type BookmarkType = z.infer<typeof bookmarkSelectSchema>;
 export type TagType = z.infer<typeof tagSelectSchema>;
+
+export const bookmarkFlags = {
+  isPinned: "pin",
+  isArchived: "archive",
+  isFavourite: "favorite",
+};
+export type BookmarkFlag = keyof typeof bookmarkFlags;
 
 export type BookmarkTagType = z.infer<typeof bookmarkTagSelectSchema>;
 export const bookmarkTagInsertSchema = z.object({
@@ -17,6 +22,11 @@ export const bookmarkTagInsertSchema = z.object({
 });
 
 export type FolderType = z.infer<typeof folderSelectSchema>;
+export const FolderPermissionLevelSchema = z.enum([
+  "viewer",
+  "editor",
+  "admin",
+]);
 
 // Task Types
 export type Task = z.infer<typeof bookmarkTaskSelectSchema> & {
