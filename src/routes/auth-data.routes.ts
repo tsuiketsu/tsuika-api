@@ -12,9 +12,9 @@ import {
 import type { SuccessResponse } from "@/types";
 import { getUserId } from "@/utils";
 import {
-  deleteImageFromBucket,
-  type ImageBucketStoreResponse,
-  storeImageToBucket,
+  type CreateObjectResponse,
+  createBucketObject,
+  deleteObjectFromBucket,
 } from "@/utils/minio";
 
 const router = createRouter();
@@ -122,10 +122,10 @@ router.openapi(updateAuthDateUser, async (c) => {
 
   // Upload file to cloud
 
-  let cloudImage: ImageBucketStoreResponse | null = null;
+  let cloudImage: CreateObjectResponse | null = null;
 
   if (image && image instanceof File) {
-    cloudImage = await storeImageToBucket({
+    cloudImage = await createBucketObject({
       origin: "local",
       fileUri: image,
       bucket: BUCKET,
@@ -165,7 +165,7 @@ router.openapi(updateAuthDateUser, async (c) => {
 
   if (oldImageUri && oldImageUri !== newImageUri) {
     const fileId = oldImageUri.split("|")[0];
-    fileId && deleteImageFromBucket(BUCKET, fileId);
+    fileId && deleteObjectFromBucket(BUCKET, fileId);
   }
 
   return c.json(

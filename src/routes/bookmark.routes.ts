@@ -21,7 +21,13 @@ import {
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
-import { deleteImageFromBucket, storeImageToBucket } from "@/utils/minio";
+import {
+  type CreateObjectResponse,
+  createBucketObject,
+  createObjectStoreURL,
+  deleteObjectFromBucket,
+  deleteObjectsFromBucket,
+} from "@/utils/minio";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
 import { db } from "../db";
@@ -30,7 +36,13 @@ import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
 import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import { type BookmarkType, bookmarkFlags } from "../types/schema.types";
-import { getOrderDirection, getPagination, getUserId, pick } from "../utils";
+import {
+  getOrderDirection,
+  getPagination,
+  getUserId,
+  hasHttpPrefix,
+  pick,
+} from "../utils";
 import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
@@ -223,6 +235,16 @@ export const bookmarkPublicFields = {
   ]),
 };
 
+const createThumbnailURL = (thumbnail: string | null) => {
+  if (thumbnail) {
+    return hasHttpPrefix(thumbnail)
+      ? thumbnail
+      : createObjectStoreURL(BUCKET, thumbnail);
+  }
+
+  return null;
+};
+
 // -----------------------------------------
 // ADD NEW BOOKMARK
 // -----------------------------------------
@@ -263,6 +285,7 @@ router.openapi(createBookmark, async (c) => {
   // but that doesn't work with neon-http, also db.batch which is not
   // very ideal for this situation since I need bookmarkId
   let siteMeta: LinkPreviewResponsse | undefined;
+  let attachment: CreateObjectResponse | null = null;
 
   if (!isEncrypted) {
     siteMeta = await fetchLinkPreview(url);
@@ -275,11 +298,18 @@ router.openapi(createBookmark, async (c) => {
     }
   }
 
-  const image = siteMeta?.data?.images?.[0];
+  const siteMetaImage = siteMeta?.data?.images?.[0];
   let imageMeta: Metadata | null = null;
 
-  if (image && image.trim() !== "") {
-    imageMeta = await getImageMedatata(image);
+  if (siteMetaImage && siteMetaImage.trim() !== "") {
+    imageMeta = await getImageMedatata(siteMetaImage);
+
+    // Cache thumbnail to objectStore
+    attachment = await createBucketObject({
+      origin: "remote",
+      fileUri: siteMetaImage,
+      bucket: BUCKET,
+    });
   }
 
   const payload = isEncrypted
@@ -296,7 +326,7 @@ router.openapi(createBookmark, async (c) => {
         title: title || siteMeta?.data?.title || "Untitled",
         description: description || siteMeta?.data?.description,
         url,
-        thumbnail: siteMeta?.data?.images?.[0],
+        thumbnail: attachment?.fileId ?? siteMetaImage,
         faviconUrl: siteMeta?.data?.favicons?.[0] ?? getFavIcon(url),
         thumbnailHeight: imageMeta?.height,
         thumbnailWidth: imageMeta?.width,
@@ -309,7 +339,8 @@ router.openapi(createBookmark, async (c) => {
   // permissionLevel null assumes folder is not a collaborative folder
   if (folderInfo?.permissionLevel !== null) {
     const selectedFolder = await db.query.folder.findFirst({
-      where: orm.eq(folder.id, folderInfo!.id),
+      // where: orm.eq(folder.id, folderInfo?.id!),
+      ...(folderInfo?.id ? { where: orm.eq(folder.id, folderInfo.id) } : {}),
       columns: { userId: true },
     });
 
@@ -355,6 +386,7 @@ router.openapi(createBookmark, async (c) => {
       data: bookmarkSelectSchema.parse({
         ...rest,
         id: publicId,
+        thumbnail: attachment?.url ?? rest.thumbnail,
         folderId,
         ...(tagsInserted ? { tags } : {}),
       }),
@@ -453,49 +485,6 @@ router.openapi(getBookmarks, async (c) => {
   const source = "bookmarks.get";
   const userId = await getUserId(c);
 
-  // Fetch bookmarks by url if query param given
-  // const queryUrl = c.req.query("url");
-  // if (queryUrl && queryUrl.trim() !== "") {
-  //   const data = await db.query.bookmark.findFirst({
-  //     where: orm.and(
-  //       orm.eq(bookmark.userId, userId),
-  //       orm.ilike(bookmark.url, `%${queryUrl}%`),
-  //     ),
-  //     with: bookmarkJoins,
-  //   });
-  //
-  //   if (!data) {
-  //     const errMsg = `Bookmark with url "${queryUrl}" not found`;
-  //     throwError("NOT_FOUND", errMsg, source);
-  //   }
-  //
-  //   const tags = data.bookmarkTag.map(({ appliedAt, tag }) => ({
-  //     ...tag,
-  //     appliedAt,
-  //   }));
-  //
-  //   const updatedData = {
-  //     ...data,
-  //     tags,
-  //   };
-  //
-  //   const { bookmarkFolder, publicId, ...rest } = updatedData;
-  //
-  //   return c.json<SuccessResponse<BookmarkType>>(
-  //     {
-  //       success: true,
-  //       data: {
-  //         ...rest,
-  //         id: publicId,
-  //         folderId: bookmarkFolder?.publicId,
-  //         tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
-  //       },
-  //       message: `Successfully fetched bookmark with url ${queryUrl}`,
-  //     },
-  //     200,
-  //   );
-  // }
-
   // Fetch all bookmarks with pagination if `url` param not found
   const condition = getFilterCondition(c.req.query());
   const orderBy = getOrderDirection(c.req.query(), "bookmarks.get");
@@ -524,7 +513,7 @@ router.openapi(getBookmarks, async (c) => {
     offset,
   });
 
-  if (data.length === 0) {
+  if (!data || data.length === 0) {
     throwError("NOT_FOUND", "No bookmarks found", source);
   }
 
@@ -532,16 +521,19 @@ router.openapi(getBookmarks, async (c) => {
     {
       success: true,
       message: "Successfully fetched all bookmarks",
-      data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
-        ...rest,
-        id: publicId,
-        folderId: bookmarkFolder?.publicId,
-        tags: bookmarkTag.map(({ tag, appliedAt }) => ({
-          ...tag,
-          id: tag.publicId,
-          appliedAt,
-        })),
-      })) as BookmarkType[],
+      data: data.map(
+        ({ thumbnail, publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
+          ...rest,
+          id: publicId,
+          folderId: bookmarkFolder?.publicId,
+          thumbnail: createThumbnailURL(thumbnail),
+          tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+            ...tag,
+            id: tag.publicId,
+            appliedAt,
+          })),
+        }),
+      ) as BookmarkType[],
       pagination: {
         page,
         limit,
@@ -614,7 +606,11 @@ router.openapi(getBookmarkByTagId, async (c) => {
   return c.json(
     {
       success: true,
-      data: data as BookmarkType[],
+      data: {
+        ...data.map((b) =>
+          Object.assign({}, b, { thumbnail: createThumbnailURL(b.thumbnail) }),
+        ),
+      } as BookmarkType[],
       message: "Successfully fetched bookmarks",
       pagination: {
         page,
@@ -723,16 +719,19 @@ router.openapi(getBookmarksByFolderId, async (c) => {
     {
       success: true,
       message: "Successfully fetched all bookmarks",
-      data: data.map(({ publicId, bookmarkFolder, bookmarkTag, ...rest }) => ({
-        ...rest,
-        id: publicId,
-        folderId: bookmarkFolder?.publicId,
-        tags: bookmarkTag.map(({ tag, appliedAt }) => ({
-          ...tag,
-          id: tag.publicId,
-          appliedAt,
-        })),
-      })),
+      data: data.map(
+        ({ publicId, thumbnail, bookmarkFolder, bookmarkTag, ...rest }) => ({
+          ...rest,
+          id: publicId,
+          folderId: bookmarkFolder?.publicId,
+          thumbnail: createThumbnailURL(thumbnail),
+          tags: bookmarkTag.map(({ tag, appliedAt }) => ({
+            ...tag,
+            id: tag.publicId,
+            appliedAt,
+          })),
+        }),
+      ),
       pagination: {
         page,
         limit,
@@ -782,7 +781,7 @@ router.openapi(getBookmarkById, async (c) => {
     tags,
   };
 
-  const { bookmarkFolder, publicId, ...rest } = updatedData;
+  const { bookmarkFolder, publicId, thumbnail, ...rest } = updatedData;
 
   return c.json(
     {
@@ -791,6 +790,7 @@ router.openapi(getBookmarkById, async (c) => {
         ...rest,
         id: publicId,
         folderId: bookmarkFolder?.publicId,
+        thumbnail: createThumbnailURL(thumbnail),
         tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
       },
       message: "Successfully fetched bookmark",
@@ -812,7 +812,7 @@ router.openapi(updateBookmark, async (c) => {
   // Get previous bookmark id and url
   const prev = await db.query.bookmark.findFirst({
     where: orm.eq(bookmark.publicId, publicId),
-    columns: { id: true, url: true },
+    columns: { id: true, url: true, thumbnail: true },
   });
 
   if (!prev) {
@@ -847,15 +847,26 @@ router.openapi(updateBookmark, async (c) => {
     }
   }
 
-  const image = siteMeta?.data?.images?.[0] || undefined;
+  const newThumbnail = siteMeta?.data?.images?.[0] || undefined;
   let imageMeta: Metadata | null = null;
+  let attachment: CreateObjectResponse | null = null;
 
   // Fetch image's metadata
-  if (image && image.trim() !== "") {
-    imageMeta = await getImageMedatata(image);
-  }
+  if (newThumbnail && newThumbnail.trim() !== "") {
+    imageMeta = await getImageMedatata(newThumbnail);
 
-  const newThumbnail = siteMeta?.data?.images?.[0];
+    // Cleanup previous thumbnail from object store
+
+    if (prev.thumbnail && !hasHttpPrefix(prev.thumbnail)) {
+      await deleteObjectFromBucket(BUCKET, prev.thumbnail);
+    }
+
+    attachment = await createBucketObject({
+      origin: "remote",
+      fileUri: newThumbnail,
+      bucket: BUCKET,
+    });
+  }
 
   const payload = isEncrypted
     ? {
@@ -878,7 +889,9 @@ router.openapi(updateBookmark, async (c) => {
         updatedAt: orm.sql`NOW()`,
         thumbnailHeight: imageMeta?.height,
         thumbnailWidth: imageMeta?.width,
-        ...(newThumbnail ? { thumbnail: newThumbnail } : {}),
+        ...(newThumbnail
+          ? { thumbnail: attachment?.fileId ?? newThumbnail }
+          : {}),
       };
 
   const data: Omit<BookmarkType, "folderId">[] = await db
@@ -909,6 +922,7 @@ router.openapi(updateBookmark, async (c) => {
       data: {
         ...data[0],
         folderId: folderId,
+        thumbnail: createThumbnailURL(data[0]?.thumbnail),
         ...(tagsInserted ? { tags } : {}),
       },
     },
@@ -934,10 +948,23 @@ router.openapi(deleteBookmarkInBulk, async (c) => {
   const data = await db
     .delete(bookmark)
     .where(orm.inArray(bookmark.publicId, bookmarkIds))
-    .returning({ deletedBookmarkId: bookmark.publicId });
+    .returning({
+      deletedBookmarkId: bookmark.publicId,
+      thumbnail: bookmark.thumbnail,
+    });
 
   if (data.length === 0) {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
+  }
+
+  // Cleanup objectStore thumbnail
+  const objectIds = data
+    .map((d) => d.thumbnail)
+    .filter((t) => !hasHttpPrefix(t))
+    .filter((t) => t !== null);
+
+  if (objectIds.length > 0) {
+    await deleteObjectsFromBucket(BUCKET, objectIds);
   }
 
   return c.json(
@@ -960,13 +987,24 @@ router.openapi(deleteBookmarkById, async (c) => {
   await verifyUserAccessByBookmark(c.req.param("id"), userId);
 
   // Remove bookmark from database
-  const data: { deletedBookmarkId: string }[] = await db
-    .delete(bookmark)
-    .where(orm.eq(bookmark.publicId, c.req.param("id")))
-    .returning({ deletedBookmarkId: bookmark.publicId });
+  const data: { deletedBookmarkId: string; thumbnail: string | null }[] =
+    await db
+      .delete(bookmark)
+      .where(orm.eq(bookmark.publicId, c.req.param("id")))
+      .returning({
+        deletedBookmarkId: bookmark.publicId,
+        thumbnail: bookmark.thumbnail,
+      });
 
   if (data.length === 0) {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
+  }
+
+  console.log(JSON.stringify(data, null, 2), "yayyaya");
+
+  // Delete objectStore thumbnail
+  if (data[0]?.thumbnail && !hasHttpPrefix(data[0].thumbnail)) {
+    await deleteObjectFromBucket(BUCKET, data[0].thumbnail);
   }
 
   return c.json(
@@ -999,7 +1037,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
   }
 
   // Upload thumbnail on imagekit
-  const thumbnail = await storeImageToBucket({
+  const thumbnail = await createBucketObject({
     origin: "local",
     fileUri: localThumbnailUrl,
     bucket: BUCKET,
@@ -1043,7 +1081,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
 
   // Delete & purge old thumbnail
   if (prevThumbnail?.thumbnail) {
-    await deleteImageFromBucket(BUCKET, prevThumbnail.thumbnail);
+    await deleteObjectFromBucket(BUCKET, prevThumbnail.thumbnail);
   }
 
   return c.json(

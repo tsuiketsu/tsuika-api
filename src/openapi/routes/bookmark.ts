@@ -328,7 +328,7 @@ export const deleteBookmarkInBulk = createRoute({
   request: {
     body: jsonContentRequired(
       z.object({
-        bookmarkIds: z.string(),
+        bookmarkIds: z.array(z.string()),
       }),
     ),
   },

@@ -23,8 +23,8 @@ export const getPagination = (
   defaultLimit = DEFAULT_QUERY_LIMIT,
   maxLimit = MAX_QUERY_LIMIT,
 ) => {
-  const rawLimit = Number.parseInt(query.limit || `${defaultLimit}`);
-  const page = Math.max(Number.parseInt(query.page || "1"), 1);
+  const rawLimit = Number.parseInt(query.limit || `${defaultLimit}`, 10);
+  const page = Math.max(Number.parseInt(query.page || "1", 10), 1);
 
   const safeLimit = Math.min(Math.max(rawLimit, 1), maxLimit);
   const offset = (page - 1) * safeLimit;
@@ -69,4 +69,9 @@ export const omit = <T extends Record<string, unknown>, K extends keyof T>(
   return Object.fromEntries(
     Object.entries(obj).filter(([key]) => !keys.includes(key as K)),
   ) as Omit<T, K>;
+};
+
+export const hasHttpPrefix = (str: string | undefined | null): boolean => {
+  if (!str || str.trim() === "") return false;
+  return str.startsWith("http");
 };
