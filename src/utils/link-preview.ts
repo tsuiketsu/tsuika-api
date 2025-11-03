@@ -10,7 +10,6 @@ export const fetchLinkPreview = async (
       {
         method: "POST",
         headers: {
-          "X-Source": "Cloudflare-Workers",
           "Content-Type": "application/json",
           "x-api-key": process.env.LINK_METADATA_API_KEY,
         },

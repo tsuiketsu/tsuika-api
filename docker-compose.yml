@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17-alpine
     command: "-d 1"
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -15,16 +15,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  neon-proxy:
-    image: ghcr.io/timowilhelm/local-neon-http-proxy:main
-    environment:
-      - PG_CONNECTION_STRING=postgres://postgres:postgres@postgres:5432/main
-    ports:
-      - "4444:4444"
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   db_data:

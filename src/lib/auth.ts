@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { betterAuth, type CookieOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, twoFactor, username } from "better-auth/plugins";
@@ -65,27 +64,17 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // requireEmailVerification: true,
-
-    // NOTE: Uncomment this if hosted on VPS, as I'm using cloudflare workers
-    // it's not possible to use bun
-    // password: {
-    //   hash: async (password) => {
-    //     return await Bun.password.hash(password, {
-    //       algorithm: "argon2id",
-    //       memoryCost: 19,
-    //     });
-    //   },
-    //   verify: async ({ password, hash }) => {
-    //     return await Bun.password.verify(password, hash);
-    //   },
-    // },
+    requireEmailVerification: true,
     password: {
       hash: async (password) => {
-        return await bcrypt.hash(password, 10);
+        return await Bun.password.hash(password, {
+          algorithm: "argon2id",
+          memoryCost: 12288,
+          timeCost: 3,
+        });
       },
       verify: async ({ password, hash }) => {
-        return await bcrypt.compare(password, hash);
+        return await Bun.password.verify(password, hash);
       },
     },
   },
