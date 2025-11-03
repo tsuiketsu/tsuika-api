@@ -9,11 +9,15 @@ import {
   UserEditableSchema,
   updateAuthDateUser,
 } from "@/openapi/routes/auth-data";
-import type { ImageKitReponse, SuccessResponse } from "@/types";
+import type { SuccessResponse } from "@/types";
 import { getUserId } from "@/utils";
-import { deleteFromImageKit, uploadOnImageKit } from "@/utils/imagekit";
+import deleteImageFromBucket from "@/utils/image-delete";
+import storeImageToBucket, {
+  type ImageBucketStoreResponse,
+} from "@/utils/image-upload";
 
 const router = createRouter();
+const BUCKET = "user-profile";
 
 // -----------------------------------------
 // GET USER SESSION
@@ -117,10 +121,14 @@ router.openapi(updateAuthDateUser, async (c) => {
 
   // Upload file to cloud
 
-  let cloudImage: ImageKitReponse | null = null;
+  let cloudImage: ImageBucketStoreResponse | null = null;
 
   if (image && image instanceof File) {
-    cloudImage = await uploadOnImageKit(image);
+    cloudImage = await storeImageToBucket({
+      origin: "local",
+      fileUri: image,
+      bucket: BUCKET,
+    });
   }
 
   const newImage = cloudImage ? `${cloudImage.fileId}|${cloudImage.url}` : null;
@@ -156,7 +164,7 @@ router.openapi(updateAuthDateUser, async (c) => {
 
   if (oldImageUri && oldImageUri !== newImageUri) {
     const fileId = oldImageUri.split("|")[0];
-    fileId && (await deleteFromImageKit(fileId));
+    fileId && deleteImageFromBucket(BUCKET, fileId);
   }
 
   return c.json(

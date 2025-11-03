@@ -14,5 +14,11 @@ declare namespace NodeJS {
     JWT_SECRET: string;
     LINK_METADATA_API_URL: string;
     LINK_METADATA_API_KEY: string;
+    S3_BUCKET_USE_SSL: string;
+    S3_BUCKET_API_PORT: number;
+    S3_BUCKET_ENDPOINT: string;
+    S3_BUCKET_ACCESS_KEY: string;
+    S3_BUCKET_KEY: string;
+    S3_BUCKET_URL: string;
   }
 }

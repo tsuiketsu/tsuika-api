@@ -19,7 +19,9 @@ import {
   updateBookmarkThumbnail,
 } from "@/openapi/routes/bookmark";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
+import deleteImageFromBucket from "@/utils/image-delete";
 import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
+import storeImageToBucket from "@/utils/image-upload";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
@@ -30,10 +32,10 @@ import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import { type BookmarkType, bookmarkFlags } from "../types/schema.types";
 import { getOrderDirection, getPagination, getUserId, pick } from "../utils";
-import { deleteFromImageKit, uploadOnImageKit } from "../utils/imagekit";
 import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
+const BUCKET = "thumbnails";
 
 const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
@@ -308,7 +310,7 @@ router.openapi(createBookmark, async (c) => {
   // permissionLevel null assumes folder is not a collaborative folder
   if (folderInfo?.permissionLevel !== null) {
     const selectedFolder = await db.query.folder.findFirst({
-      where: orm.eq(folder.id, folderInfo?.id!),
+      where: orm.eq(folder.id, folderInfo!.id),
       columns: { userId: true },
     });
 
@@ -998,12 +1000,16 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
   }
 
   // Upload thumbnail on imagekit
-  const thumbnail = await uploadOnImageKit(localThumbnailUrl);
+  const thumbnail = await storeImageToBucket({
+    origin: "local",
+    fileUri: localThumbnailUrl,
+    bucket: BUCKET,
+  });
 
   if (!thumbnail || !thumbnail.fileId) {
     throwError(
       "THIRD_PARTY_SERVICE_FAILED",
-      thumbnail.message || "Failed to update thumbnail",
+      "Failed to update thumbnail",
       source,
     );
   }
@@ -1038,7 +1044,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
 
   // Delete & purge old thumbnail
   if (prevThumbnail?.thumbnail) {
-    await deleteFromImageKit(prevThumbnail.thumbnail);
+    await deleteImageFromBucket(BUCKET, prevThumbnail.thumbnail);
   }
 
   return c.json(
