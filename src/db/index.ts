@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import * as assetSchema from "./schema/asset.schema";
 import * as authSchema from "./schema/auth.schema";
 import * as bookmarkSchema from "./schema/bookmark.schema";
 import * as bookmarkTasks from "./schema/bookmark.schema";
@@ -27,6 +28,7 @@ export const db = drizzle({
     ...bookmarkTasks,
     ...sharedFolderSchema,
     ...collabFolderSchema,
+    ...assetSchema,
   },
   client: pool,
   casing: "snake_case",

@@ -1,3 +1,4 @@
+export { default as asset } from "./asset.routes";
 export { default as auth } from "./auth.routes";
 export { default as authData } from "./auth-data.routes";
 export { default as bookmark } from "./bookmark.routes";
