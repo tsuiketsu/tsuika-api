@@ -19,10 +19,9 @@ import {
   updateBookmarkThumbnail,
 } from "@/openapi/routes/bookmark";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
-import deleteImageFromBucket from "@/utils/image-delete";
 import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
-import storeImageToBucket from "@/utils/image-upload";
 import { fetchLinkPreview } from "@/utils/link-preview";
+import { deleteImageFromBucket, storeImageToBucket } from "@/utils/minio";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
 import { db } from "../db";

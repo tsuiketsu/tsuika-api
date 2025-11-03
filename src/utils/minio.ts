@@ -1,6 +1,9 @@
 import minioClient from "@/lib/minio";
 import { generatePublicId } from "./nanoid";
 
+// -----------------------------------------
+// UPLOAD IMAGE HANDLER
+// -----------------------------------------
 type ImageUploadArgs = {
   bucket: string;
   objectId?: string;
@@ -22,9 +25,10 @@ export type ImageBucketStoreResponse = {
   url: string | null;
 };
 
-export default async function storeImageToBucket(
-  args: ImageUploadArgs,
-): Promise<ImageBucketStoreResponse> {
+export async function storeImageToBucket(args: ImageUploadArgs): Promise<{
+  fileId: string | null;
+  url: string | null;
+}> {
   // Create bucket if not exists
   const exists = await minioClient.bucketExists(args.bucket);
 
@@ -102,4 +106,22 @@ export default async function storeImageToBucket(
   }
 
   return { fileId: null, url: null };
+}
+
+// -----------------------------------------
+// DELETE IMAGE HANDLER
+// -----------------------------------------
+
+export async function deleteImageFromBucket(bucket: string, fileId: string) {
+  const exists = await minioClient.bucketExists(bucket);
+
+  if (!exists) return;
+
+  try {
+    await minioClient.removeObject(bucket, fileId, {
+      forceDelete: true,
+    });
+  } catch (error) {
+    console.error(`Failed to delete file ${fileId}`, error);
+  }
 }

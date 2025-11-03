@@ -11,10 +11,11 @@ import {
 } from "@/openapi/routes/auth-data";
 import type { SuccessResponse } from "@/types";
 import { getUserId } from "@/utils";
-import deleteImageFromBucket from "@/utils/image-delete";
-import storeImageToBucket, {
+import {
+  deleteImageFromBucket,
   type ImageBucketStoreResponse,
-} from "@/utils/image-upload";
+  storeImageToBucket,
+} from "@/utils/minio";
 
 const router = createRouter();
 const BUCKET = "user-profile";
