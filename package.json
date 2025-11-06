@@ -38,7 +38,7 @@
     "image-size": "^2.0.2",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
-    "link-preview-js": "^3.0.15",
+    "link-preview-js": "^3.1.0",
     "lodash.kebabcase": "^4.1.1",
     "minio": "^8.0.6",
     "nanoid": "^5.1.5",

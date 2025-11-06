@@ -1,31 +1,58 @@
-import type { LinkPreviewResponsse } from "@/types/link-preview.types";
+import * as dns from "node:dns";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { getLinkPreview } from "link-preview-js";
 
-// link-preview-js doesn't works except node.js envs
+export type LinkPreview = {
+  url: string;
+  title: string;
+  siteName: string | undefined;
+  description: string | undefined;
+  mediaType: string;
+  contentType: string | undefined;
+  images: string[];
+  videos: {
+    url: string | undefined;
+    secureUrl: string | null | undefined;
+    type: string | null | undefined;
+    width: string | undefined;
+    height: string | undefined;
+  }[];
+  favicons: string[];
+  charset: string | null;
+};
+
+export interface LinkPreviewResponsse {
+  status: ContentfulStatusCode;
+  message: string;
+  data: Partial<LinkPreview> | null;
+}
+
 export const fetchLinkPreview = async (
-  url: string,
+  websiteUrl: string,
 ): Promise<LinkPreviewResponsse> => {
   try {
-    const response = await fetch(
-      `${process.env.LINK_METADATA_API_URL}/api/v1`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": process.env.LINK_METADATA_API_KEY,
-        },
-        body: JSON.stringify({ url }),
+    const response = await getLinkPreview(websiteUrl, {
+      followRedirects: "manual",
+      headers: { "user-agent": "Twitterbot" },
+      handleRedirects: () => true,
+      resolveDNSHost: async (url: string) => {
+        return new Promise((resolve, reject) => {
+          const hostname = new URL(url).hostname;
+          dns.lookup(hostname, (err, address) => {
+            if (err) {
+              reject(err);
+            }
+            resolve(address);
+          });
+        });
       },
-    );
+    });
 
-    if (!response.ok) {
-      return {
-        status: 502,
-        message: "Failed to fetch link preview",
-        data: null,
-      };
-    }
-
-    return response.json();
+    return {
+      status: 200,
+      message: "Successfully fetched link preview",
+      data: response,
+    };
     // biome-ignore lint/suspicious/noExplicitAny: false
   } catch (error: any) {
     console.error(error);
@@ -37,38 +64,3 @@ export const fetchLinkPreview = async (
     };
   }
 };
-
-// export const fetchLinkPreview = async (
-//   websiteUrl: string,
-// ): Promise<LinkPreviewResponsse> => {
-//   try {
-//     const response = await getLinkPreview(websiteUrl, {
-//       resolveDNSHost: async (url: string) => {
-//         return new Promise((resolve, reject) => {
-//           const hostname = new URL(url).hostname;
-//           dns.lookup(hostname, (err, address) => {
-//             if (err) {
-//               reject(err);
-//             }
-//             resolve(address);
-//           });
-//         });
-//       },
-//     });
-//
-//     return {
-//       status: 200,
-//       message: "Successfully fetched link preview",
-//       data: response,
-//     };
-//     // biome-ignore lint/suspicious/noExplicitAny: false
-//   } catch (error: any) {
-//     console.error(error);
-//
-//     return {
-//       status: 502,
-//       message: error.message || "Failed to fetch link preview",
-//       data: null,
-//     };
-//   }
-// };
