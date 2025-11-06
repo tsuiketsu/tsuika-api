@@ -1,23 +1,28 @@
+import { z } from "zod";
 import type { CustomResponse } from ".";
 
-export type LinkPreview = {
-  url: string;
-  title: string;
-  siteName: string | undefined;
-  description: string | undefined;
-  mediaType: string;
-  contentType: string | undefined;
-  images: string[];
-  videos: {
-    url: string | undefined;
-    secureUrl: string | null | undefined;
-    type: string | null | undefined;
-    width: string | undefined;
-    height: string | undefined;
-  }[];
-  favicons: string[];
-  charset: string | null;
-};
+export const LinkPreviewSchema = z.object({
+  url: z.url(),
+  title: z.string(),
+  siteName: z.string().optional(),
+  description: z.string().optional(),
+  mediaType: z.string(),
+  contentType: z.string().optional(),
+  images: z.array(z.url()),
+  videos: z.array(
+    z.object({
+      url: z.url().optional(),
+      secureUrl: z.url().nullable().optional(),
+      type: z.string().nullable().optional(),
+      width: z.string().optional(),
+      height: z.string().optional(),
+    }),
+  ),
+  favicons: z.array(z.url()),
+  charset: z.string().nullable(),
+});
+
+export type LinkPreview = z.infer<typeof LinkPreviewSchema>;
 
 export interface LinkPreviewResponsse extends CustomResponse {
   data: Partial<LinkPreview> | null;

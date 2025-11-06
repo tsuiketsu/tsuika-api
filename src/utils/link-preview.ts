@@ -1,31 +1,6 @@
 import * as dns from "node:dns";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getLinkPreview } from "link-preview-js";
-
-export type LinkPreview = {
-  url: string;
-  title: string;
-  siteName: string | undefined;
-  description: string | undefined;
-  mediaType: string;
-  contentType: string | undefined;
-  images: string[];
-  videos: {
-    url: string | undefined;
-    secureUrl: string | null | undefined;
-    type: string | null | undefined;
-    width: string | undefined;
-    height: string | undefined;
-  }[];
-  favicons: string[];
-  charset: string | null;
-};
-
-export interface LinkPreviewResponsse {
-  status: ContentfulStatusCode;
-  message: string;
-  data: Partial<LinkPreview> | null;
-}
+import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 
 export const fetchLinkPreview = async (
   websiteUrl: string,
