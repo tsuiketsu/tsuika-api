@@ -10,3 +10,4 @@ export { default as share } from "./share.routes";
 export { default as sharedFolder } from "./shared-folder";
 export { default as tag } from "./tag.routes";
 export { default as task } from "./task.routes";
+export { default as util } from "./util.routes";

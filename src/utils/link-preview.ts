@@ -1,5 +1,6 @@
 import * as dns from "node:dns";
 import { getLinkPreview } from "link-preview-js";
+import { ERROR_DEFINITIONS } from "@/errors/codes";
 import type { LinkPreviewResponsse } from "@/types/link-preview.types";
 
 export const fetchLinkPreview = async (
@@ -33,7 +34,7 @@ export const fetchLinkPreview = async (
     console.error(error);
 
     return {
-      status: 502,
+      status: ERROR_DEFINITIONS.INTERNAL_ERROR.status,
       message: error.message || "Failed to fetch link preview",
       data: null,
     };
