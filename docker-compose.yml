@@ -38,5 +38,3 @@ services:
 volumes:
   minio-data:
   db_data:
-  tsuika-object-storage:
-    name: "tsuika-object-storage"
