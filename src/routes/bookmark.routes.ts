@@ -526,7 +526,9 @@ router.openapi(getBookmarks, async (c) => {
           ...rest,
           id: publicId,
           folderId: bookmarkFolder?.publicId,
-          thumbnail: createThumbnailURL(thumbnail),
+          thumbnail: !rest.isEncrypted
+            ? createThumbnailURL(thumbnail)
+            : thumbnail || null,
           tags: bookmarkTag.map(({ tag, appliedAt }) => ({
             ...tag,
             id: tag.publicId,
@@ -608,7 +610,11 @@ router.openapi(getBookmarkByTagId, async (c) => {
       success: true,
       data: {
         ...data.map((b) =>
-          Object.assign({}, b, { thumbnail: createThumbnailURL(b.thumbnail) }),
+          Object.assign({}, b, {
+            thumbnail: !b.isEncrypted
+              ? createThumbnailURL(b.thumbnail)
+              : b.thumbnail || null,
+          }),
         ),
       } as BookmarkType[],
       message: "Successfully fetched bookmarks",
@@ -724,7 +730,9 @@ router.openapi(getBookmarksByFolderId, async (c) => {
           ...rest,
           id: publicId,
           folderId: bookmarkFolder?.publicId,
-          thumbnail: createThumbnailURL(thumbnail),
+          thumbnail: !rest.isEncrypted
+            ? createThumbnailURL(thumbnail)
+            : thumbnail || null,
           tags: bookmarkTag.map(({ tag, appliedAt }) => ({
             ...tag,
             id: tag.publicId,
@@ -790,7 +798,9 @@ router.openapi(getBookmarkById, async (c) => {
         ...rest,
         id: publicId,
         folderId: bookmarkFolder?.publicId,
-        thumbnail: createThumbnailURL(thumbnail),
+        thumbnail: !rest.isEncrypted
+          ? createThumbnailURL(thumbnail)
+          : thumbnail || null,
         tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
       },
       message: "Successfully fetched bookmark",
@@ -922,7 +932,9 @@ router.openapi(updateBookmark, async (c) => {
       data: {
         ...data[0],
         folderId: folderId,
-        thumbnail: createThumbnailURL(data[0]?.thumbnail),
+        thumbnail: !isEncrypted
+          ? createThumbnailURL(data[0]?.thumbnail)
+          : thumbnail || null,
         ...(tagsInserted ? { tags } : {}),
       },
     },
