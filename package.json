@@ -28,7 +28,8 @@
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",
     "lint:commit": "commitlint --edit",
-    "db:generate": "bun drizzle-kit generate --config=drizzle.config.ts"
+    "db:generate": "bun drizzle-kit generate --config=drizzle.config.ts",
+    "build:container": "docker build -t tsuika-api ."
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.1.3",
