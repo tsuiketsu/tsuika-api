@@ -80,7 +80,7 @@ export const getAllTags = createRoute({
   description: "Get all tags",
   tags,
   operationId: "tags_all_get",
-  request: { query: z.object({ orderBy: z.enum(["asc", "desc"]) }) },
+  request: { query: z.object({ orderBy: z.enum(["asc", "desc"]).optional() }) },
   responses: {
     200: createSuccessObject({
       data: z.array(tagSelectSchema).openapi({ example: tagExamples }),
