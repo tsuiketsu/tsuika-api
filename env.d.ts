@@ -6,6 +6,7 @@ declare namespace NodeJS {
     FRONTEND_ORIGIN: string;
     CORS_ORIGIN_HOPPSCOTCH: string;
     CORS_ORIGIN_BROWSER_EXTENSION: string;
+    ENABLE_EMAIL_VERIFICATION: string;
     RESEND_API_KEY: string;
     JWT_SECRET: string;
     S3_BUCKET_USE_SSL: string;

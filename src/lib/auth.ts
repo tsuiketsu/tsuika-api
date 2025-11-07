@@ -13,6 +13,8 @@ import {
   verification,
 } from "../db/schema/auth.schema";
 
+const isEmailVerification = process.env.ENABLE_EMAIL_VERIFICATION === "true";
+
 const cookieOpts: CookieOptions = {
   httpOnly: true,
   domain: `.${process.env.DOMAIN}`,
@@ -32,6 +34,16 @@ export const auth = betterAuth({
     },
     usePlural: true,
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user, _ctx) => {
+          return { data: { ...user, emailVerified: !isEmailVerification } };
+        },
+      },
+    },
+  },
+
   trustedOrigins,
   session: {
     cookieCache: {
@@ -64,7 +76,7 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    requireEmailVerification: isEmailVerification,
     password: {
       hash: async (password) => {
         return await Bun.password.hash(password, {
@@ -79,7 +91,7 @@ export const auth = betterAuth({
     },
   },
   emailVerification: {
-    sendOnSignUp: true,
+    sendOnSignUp: isEmailVerification,
     autoSignInAfterVerification: true,
     expiresIn: 3600,
   },
@@ -91,6 +103,7 @@ export const auth = betterAuth({
       },
     }),
     emailOTP({
+      sendVerificationOnSignUp: isEmailVerification,
       allowedAttempts: 5,
       async sendVerificationOTP({ email, otp, type }) {
         const verification = await db.query.verification.findFirst({
