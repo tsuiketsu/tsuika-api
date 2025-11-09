@@ -107,47 +107,6 @@ const getFilterCondition = (
   return condition;
 };
 
-const getTagIds = async (
-  userId: string,
-  tagPublicIds: string[] | undefined,
-): Promise<number[] | undefined> => {
-  if (!tagPublicIds) return undefined;
-
-  const tags = await db.query.tag.findMany({
-    where: orm.and(
-      orm.eq(bookmark.userId, userId),
-      orm.inArray(tag.publicId, tagPublicIds),
-    ),
-    columns: { id: true },
-  });
-
-  if (tags.length === 0) {
-    throwError("NOT_FOUND", "No tags found", "bookmarks.tags.get");
-  }
-
-  return tags.map(({ id }) => id);
-};
-
-const insertTags = async (
-  userId: string,
-  bookmarkId: number | undefined,
-  tags: number[] | undefined,
-): Promise<boolean> => {
-  let tagsInserted = false;
-  if (bookmarkId && tags && tags.length > 0) {
-    const response = await db
-      .insert(bookmarkTag)
-      .values(tags.map((tagId) => ({ userId, tagId, bookmarkId })))
-      .onConflictDoNothing()
-      .returning({ bookmarkId: bookmarkTag.bookmarkId });
-
-    if (response.length > 0 && response[0] != null) {
-      tagsInserted = true;
-    }
-  }
-  return tagsInserted;
-};
-
 // Check if user is authorized by permissionLevel and userId match allowed
 // to delete bookmark or not
 async function verifyUserAccessByBookmark(
@@ -281,9 +240,6 @@ router.openapi(createBookmark, async (c) => {
     );
   }
 
-  // NOTE: Whole thing is not very robust, db.transaction is better choice
-  // but that doesn't work with neon-http, also db.batch which is not
-  // very ideal for this situation since I need bookmarkId
   let siteMeta: LinkPreviewResponsse | undefined;
   let attachment: CreateObjectResponse | null = null;
 
@@ -349,8 +305,8 @@ router.openapi(createBookmark, async (c) => {
     }
   }
 
-  const data: (Omit<BookmarkType, "id" | "folderId"> & { id: number })[] =
-    await db
+  const data = await db.transaction(async (tx) => {
+    const bmark = await tx
       .insert(bookmark)
       .values({
         publicId: generatePublicId(),
@@ -360,24 +316,46 @@ router.openapi(createBookmark, async (c) => {
       })
       .returning();
 
-  if (data.length === 0 || typeof data[0] === "undefined") {
+    const bookmarkId = bmark[0]?.id;
+
+    if (!bookmarkId) {
+      tx.rollback();
+      throwError("INTERNAL_ERROR", "Failed to add bookmark", source);
+    }
+
+    const tagIds =
+      (
+        await tx.query.tag.findMany({
+          where: orm.and(
+            orm.eq(bookmark.userId, userId),
+            orm.inArray(tag.publicId, tags?.map((tag) => tag.id) ?? []),
+          ),
+          columns: { id: true },
+        })
+      )?.map((tag) => tag.id) ?? [];
+
+    if (tagIds.length === 0) {
+      tx.rollback();
+      throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+    }
+
+    const tagsResponse = await tx
+      .insert(bookmarkTag)
+      .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId })))
+      .onConflictDoNothing()
+      .returning({ bookmarkId: bookmarkTag.bookmarkId });
+
+    return {
+      bookmark: bmark[0],
+      isTagsInserted: tagsResponse && tagsResponse[0] !== null,
+    };
+  });
+
+  if (!data || !data.bookmark) {
     throwError("INTERNAL_ERROR", "Failed to add bookmark", source);
   }
 
-  const bookmarkId = data[0].id;
-
-  // Insert tags if given
-  let tagsInserted = false;
-
-  if (tags && tags.length > 0) {
-    const tagIds = await getTagIds(
-      userId,
-      tags?.map((tag) => tag.id),
-    );
-    tagsInserted = await insertTags(userId, bookmarkId, tagIds);
-  }
-
-  const { publicId, ...rest } = data[0];
+  const { publicId, ...rest } = data.bookmark;
 
   return c.json(
     {
@@ -388,7 +366,7 @@ router.openapi(createBookmark, async (c) => {
         id: publicId,
         thumbnail: attachment?.url ?? rest.thumbnail,
         folderId,
-        ...(tagsInserted ? { tags } : {}),
+        ...(data.isTagsInserted ? { tags } : {}),
       }),
     },
     200,
@@ -904,38 +882,64 @@ router.openapi(updateBookmark, async (c) => {
           : {}),
       };
 
-  const data: Omit<BookmarkType, "folderId">[] = await db
-    .update(bookmark)
-    .set(payload)
-    .where(orm.eq(bookmark.id, prev.id))
-    .returning(bookmarkPublicFields);
+  const data = await db.transaction(async (tx) => {
+    const bmark = await tx
+      .update(bookmark)
+      .set(payload)
+      .where(orm.eq(bookmark.id, prev.id))
+      .returning(bookmarkPublicFields);
 
-  if (data.length === 0 || data[0] == null) {
-    throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
-  }
+    if (!bmark || bmark[0] == null) {
+      tx.rollback();
+      throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+    }
 
-  // Insert tags if found
-  let tagsInserted = false;
+    if (!tags || tags.length === 0) {
+      return { bookmark: bmark[0], isTagsInserted: false };
+    }
 
-  if (tags && tags.length > 0) {
-    const tagIds = await getTagIds(
-      userId,
-      tags?.map((tag) => tag.id),
-    );
-    tagsInserted = await insertTags(userId, prev.id, tagIds);
-  }
+    const tagIds =
+      (
+        await tx.query.tag.findMany({
+          where: orm.and(
+            orm.eq(bookmark.userId, userId),
+            orm.inArray(
+              tag.publicId,
+              tags?.map((tag) => tag.id),
+            ),
+          ),
+          columns: { id: true },
+        })
+      )?.map((tag) => tag.id) ?? [];
+
+    if (tagIds.length === 0) {
+      tx.rollback();
+      throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+    }
+
+    const tagsResponse = await tx
+      .insert(bookmarkTag)
+      .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId: prev.id })))
+      .onConflictDoNothing()
+      .returning({ bookmarkId: bookmarkTag.bookmarkId });
+
+    return {
+      bookmark: bmark[0],
+      isTagsInserted: tagsResponse && tagsResponse[0] !== null,
+    };
+  });
 
   return c.json(
     {
       success: true,
       message: "Bookmark updated successfully 🔖",
       data: {
-        ...data[0],
+        ...data.bookmark,
         folderId: folderId,
         thumbnail: !isEncrypted
-          ? createThumbnailURL(data[0]?.thumbnail)
+          ? createThumbnailURL(data.bookmark?.thumbnail)
           : thumbnail || null,
-        ...(tagsInserted ? { tags } : {}),
+        ...(data.isTagsInserted ? { tags } : {}),
       },
     },
     200,
