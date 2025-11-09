@@ -41,7 +41,7 @@ const getFolderIdParam = (c: Context): string => {
   return folderId;
 };
 
-const verifyFolderExistance = async (folderId: string) => {
+const verifyFolderExistence = async (folderId: string) => {
   const data = await db.query.folder.findFirst({
     where: (folder, { eq }) => eq(folder.publicId, folderId),
     columns: {
@@ -328,7 +328,7 @@ router.openapi(updateFolder, async (c) => {
   void (await validateFolderName(name, source));
 
   // FIX: This causing slow query, give better error
-  await verifyFolderExistance(folderId);
+  await verifyFolderExistence(folderId);
 
   const data = await db.execute(sql`
         UPDATE folders
@@ -367,7 +367,7 @@ router.openapi(deleteFolder, async (c) => {
   const folderId = getFolderIdParam(c);
   const userId = await getUserId(c);
 
-  void (await verifyFolderExistance(folderId));
+  void (await verifyFolderExistence(folderId));
 
   const data = await db
     .delete(folder)

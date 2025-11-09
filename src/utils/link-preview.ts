@@ -1,11 +1,11 @@
 import * as dns from "node:dns";
 import { getLinkPreview } from "link-preview-js";
 import { ERROR_DEFINITIONS } from "@/errors/codes";
-import type { LinkPreviewResponsse } from "@/types/link-preview.types";
+import type { LinkPreviewResponse } from "@/types/link-preview.types";
 
 export const fetchLinkPreview = async (
   websiteUrl: string,
-): Promise<LinkPreviewResponsse> => {
+): Promise<LinkPreviewResponse> => {
   try {
     const response = await getLinkPreview(websiteUrl, {
       followRedirects: "manual",

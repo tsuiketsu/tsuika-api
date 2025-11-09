@@ -11,14 +11,14 @@ import {
   createSuccessObject,
   jsonContentRequired,
 } from "../helpers";
-import { generateFakerNanoids } from "../utils";
+import { generateFakerNanoIds } from "../utils";
 
 const tags = ["User Profile"];
 const sources = createSources("profile");
 const SelectSchema = addExamples(profileSelectSchema, {
   preferencesJson: {
     font: "font-inter",
-    pinnedFolders: [generateFakerNanoids(2)],
+    pinnedFolders: [generateFakerNanoIds(2)],
   },
 });
 

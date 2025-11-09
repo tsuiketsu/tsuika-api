@@ -26,14 +26,14 @@ export function verifyHash(
       if (err) reject(err);
 
       const derivedKeyHex = derivedKey.toHex();
-      const storeButffer = Buffer.from(hashedPass, "hex");
+      const storeBuffer = Buffer.from(hashedPass, "hex");
       const derivedBuffer = Buffer.from(derivedKeyHex, "hex");
 
-      if (storeButffer.length !== derivedBuffer.length) {
+      if (storeBuffer.length !== derivedBuffer.length) {
         return resolve(false);
       }
 
-      const isMatch = timingSafeEqual(storeButffer, derivedBuffer);
+      const isMatch = timingSafeEqual(storeBuffer, derivedBuffer);
       resolve(isMatch);
     });
   });

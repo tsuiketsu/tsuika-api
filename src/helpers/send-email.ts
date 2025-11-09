@@ -23,7 +23,7 @@ export async function sendMail(
 
     return response;
   } catch (error) {
-    console.error("Faled to send email", error);
+    console.error("Failed to send email", error);
     return { data: null, error: error as ErrorResponse };
   }
 }

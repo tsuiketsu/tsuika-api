@@ -18,8 +18,8 @@ const blockDemoHostMiddleware = async (c: Context, next: Next) => {
   const isOriginDemo = !origin || origin.toLowerCase()?.includes("demo");
 
   if (isOriginDemo && isAuthPath && !allowedAuthMethods.includes(method)) {
-    const messsage = `Method ${method} is not allowed on demo auth routes.`;
-    throwError("FORBIDDEN", messsage, errorText);
+    const message = `Method ${method} is not allowed on demo auth routes.`;
+    throwError("FORBIDDEN", message, errorText);
   }
 
   if (isOriginDemo && !isAuthPath && !allowedMethods.includes(method)) {

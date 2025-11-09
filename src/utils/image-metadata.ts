@@ -6,7 +6,7 @@ export type Metadata = {
   type?: string;
 };
 
-export const getImageMedatata = async (
+export const getImageMetadata = async (
   img: string,
 ): Promise<Metadata | null> => {
   try {

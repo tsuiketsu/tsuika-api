@@ -24,6 +24,6 @@ export const LinkPreviewSchema = z.object({
 
 export type LinkPreview = z.infer<typeof LinkPreviewSchema>;
 
-export interface LinkPreviewResponsse extends CustomResponse {
+export interface LinkPreviewResponse extends CustomResponse {
   data: Partial<LinkPreview> | null;
 }

@@ -135,7 +135,7 @@ export const unpublishSharedFolder = createRoute({
 export const getSharedFolderContent = createRoute({
   method: "get",
   path: "/{username}/folder/{publicId}",
-  description: "Get bookamrks from shared folder",
+  description: "Get bookmarks from shared folder",
   summary: "Fetch bookmarks",
   tags,
   operationId: "shared-folders_bookmarks_get",
@@ -184,7 +184,7 @@ export const getSharedFolderContent = createRoute({
 export const unlockSharedFolder = createRoute({
   method: "post",
   path: "/folder/{publicId}/unlock",
-  description: "Unlock publishd/shared folder if locked with password",
+  description: "Unlock published/shared folder if locked with password",
   summary: "Unlock Folder",
   tags,
   operationId: "shared-folders_unlock_post",
@@ -220,7 +220,7 @@ export const unlockSharedFolder = createRoute({
 export const lockSharedFolder = createRoute({
   method: "post",
   path: "/folder/{publicId}/lock",
-  description: "Lock publishd/shared folder if unlocked",
+  description: "Lock published/shared folder if unlocked",
   summary: "Lock Folder",
   tags,
   operationId: "shared-folders_lock_post",

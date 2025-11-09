@@ -20,7 +20,7 @@ import {
   createUnauthorizedByRoleObject,
   jsonContentRequired,
 } from "../helpers";
-import { generateFakerNanoid, generateFakerNanoids } from "../utils";
+import { generateFakerNanoIds, generateFakerNanoid } from "../utils";
 
 const tags = ["Bookmarks"];
 
@@ -336,7 +336,7 @@ export const deleteBookmarkInBulk = createRoute({
     200: createSuccessObject({
       data: z.array(
         z.string().openapi({
-          example: generateFakerNanoids(5),
+          example: generateFakerNanoIds(5),
         }),
       ),
       message: "Successfully deleted selected bookmarks",
@@ -452,7 +452,7 @@ export const addBookmarksToFolder = createRoute({
 // -----------------------------------------
 // TOGGLE BOOKMARK PIN, FAVORITE, ARCHIVE
 // -----------------------------------------
-export const tooggleBookmarkFlag = createRoute({
+export const toggleBookmarkFlag = createRoute({
   method: "patch",
   path: "/{id}/{flag}",
   summary: "Toggle Flag",

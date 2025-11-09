@@ -14,12 +14,12 @@ import {
   getBookmarksByFolderId,
   getBookmarkUrls,
   getTotalBookmarksCount,
-  tooggleBookmarkFlag,
+  toggleBookmarkFlag,
   updateBookmark,
   updateBookmarkThumbnail,
 } from "@/openapi/routes/bookmark";
-import type { LinkPreviewResponsse } from "@/types/link-preview.types";
-import { getImageMedatata, type Metadata } from "@/utils/image-metadata";
+import type { LinkPreviewResponse } from "@/types/link-preview.types";
+import { getImageMetadata, type Metadata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
 import {
   type CreateObjectResponse,
@@ -240,7 +240,7 @@ router.openapi(createBookmark, async (c) => {
     );
   }
 
-  let siteMeta: LinkPreviewResponsse | undefined;
+  let siteMeta: LinkPreviewResponse | undefined;
   let attachment: CreateObjectResponse | null = null;
 
   if (!isEncrypted) {
@@ -258,7 +258,7 @@ router.openapi(createBookmark, async (c) => {
   let imageMeta: Metadata | null = null;
 
   if (siteMetaImage && siteMetaImage.trim() !== "") {
-    imageMeta = await getImageMedatata(siteMetaImage);
+    imageMeta = await getImageMetadata(siteMetaImage);
 
     // Cache thumbnail to objectStore
     attachment = await createBucketObject({
@@ -821,7 +821,7 @@ router.openapi(updateBookmark, async (c) => {
 
   const folderRowId = await authorizeAndFetchFolderId(folderId, userId);
 
-  let siteMeta: LinkPreviewResponsse | undefined;
+  let siteMeta: LinkPreviewResponse | undefined;
 
   // If current and prev.url same don't fetch site's metadata
   if (getCleanUrl(prev.url) !== getCleanUrl(url)) {
@@ -841,7 +841,7 @@ router.openapi(updateBookmark, async (c) => {
 
   // Fetch image's metadata
   if (newThumbnail && newThumbnail.trim() !== "") {
-    imageMeta = await getImageMedatata(newThumbnail);
+    imageMeta = await getImageMetadata(newThumbnail);
 
     // Cleanup previous thumbnail from object store
 
@@ -1016,8 +1016,6 @@ router.openapi(deleteBookmarkById, async (c) => {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
   }
 
-  console.log(JSON.stringify(data, null, 2), "yayyaya");
-
   // Delete objectStore thumbnail
   if (data[0]?.thumbnail && !hasHttpPrefix(data[0].thumbnail)) {
     await deleteObjectFromBucket(BUCKET, data[0].thumbnail);
@@ -1052,7 +1050,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
     throwError("REQUIRED_FIELD", "Thumbnail image file is required", source);
   }
 
-  // Upload thumbnail on imagekit
+  // Upload thumbnail on Minio bucket
   const thumbnail = await createBucketObject({
     origin: "local",
     fileUri: localThumbnailUrl,
@@ -1128,7 +1126,7 @@ router.openapi(addBookmarksToFolder, async (c) => {
   if (bookmarkIds.length === 0) {
     throwError(
       "INVALID_PARAMETER",
-      "Atleast one bookmarkId is required",
+      "At least one bookmarkId is required",
       source,
     );
   }
@@ -1160,7 +1158,7 @@ router.openapi(addBookmarksToFolder, async (c) => {
 // -----------------------------------------
 // TOGGLE BOOKMARK PIN, FAVORITE, ARCHIVE
 // -----------------------------------------
-router.openapi(tooggleBookmarkFlag, async (c) => {
+router.openapi(toggleBookmarkFlag, async (c) => {
   const source = "bookmarks.patch";
   const { state } = c.req.valid("json");
   const publicId = c.req.param("id");

@@ -23,7 +23,7 @@ export const sharedFolderPublicFields = {
   isLocked: sf.isLocked,
   isPublic: sf.isPublic,
   viewCount: sf.viewCount,
-  lastViewdAt: sf.lastViewdAt,
+  lastViewedAt: sf.lastViewedAt,
   expiresAt: sf.expiresAt,
   unpublishedAt: sf.unpublishedAt,
   createdAt: sf.createdAt,

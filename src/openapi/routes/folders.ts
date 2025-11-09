@@ -203,7 +203,7 @@ export const getCollabFolders = createRoute({
   method: "get",
   path: "/collabs",
   description: "Get all folders that are shared with other members",
-  summary: "Fetch Collaboratives",
+  summary: "Fetch Collaborative",
   tags,
   operationId: "folders_fetch_collabs_get",
   responses: {
