@@ -319,7 +319,6 @@ router.openapi(createBookmark, async (c) => {
     const bookmarkId = bmark[0]?.id;
 
     if (!bookmarkId) {
-      tx.rollback();
       throwError("INTERNAL_ERROR", "Failed to add bookmark", source);
     }
 
@@ -334,21 +333,24 @@ router.openapi(createBookmark, async (c) => {
         })
       )?.map((tag) => tag.id) ?? [];
 
-    if (tagIds.length === 0) {
-      tx.rollback();
-      throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+    let isTagsInserted = false;
+
+    if (tagIds.length > 0) {
+      const tagsResponse = await tx
+        .insert(bookmarkTag)
+        .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId })))
+        .onConflictDoNothing()
+        .returning({ bookmarkId: bookmarkTag.bookmarkId });
+
+      if (!tagsResponse || tagsResponse[0] == null) {
+        tx.rollback();
+        throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+      }
+
+      isTagsInserted = true;
     }
 
-    const tagsResponse = await tx
-      .insert(bookmarkTag)
-      .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId })))
-      .onConflictDoNothing()
-      .returning({ bookmarkId: bookmarkTag.bookmarkId });
-
-    return {
-      bookmark: bmark[0],
-      isTagsInserted: tagsResponse && tagsResponse[0] !== null,
-    };
+    return { bookmark: bmark[0], isTagsInserted };
   });
 
   if (!data || !data.bookmark) {
@@ -890,7 +892,6 @@ router.openapi(updateBookmark, async (c) => {
       .returning(bookmarkPublicFields);
 
     if (!bmark || bmark[0] == null) {
-      tx.rollback();
       throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
     }
 
@@ -912,20 +913,26 @@ router.openapi(updateBookmark, async (c) => {
         })
       )?.map((tag) => tag.id) ?? [];
 
-    if (tagIds.length === 0) {
-      tx.rollback();
-      throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
-    }
+    let isTagsInserted = false;
 
-    const tagsResponse = await tx
-      .insert(bookmarkTag)
-      .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId: prev.id })))
-      .onConflictDoNothing()
-      .returning({ bookmarkId: bookmarkTag.bookmarkId });
+    if (tagIds.length > 0) {
+      const tagsResponse = await tx
+        .insert(bookmarkTag)
+        .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId: prev.id })))
+        .onConflictDoNothing()
+        .returning({ bookmarkId: bookmarkTag.bookmarkId });
+
+      if (!tagsResponse || tagsResponse[0] == null) {
+        tx.rollback();
+        throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
+      }
+
+      isTagsInserted = true;
+    }
 
     return {
       bookmark: bmark[0],
-      isTagsInserted: tagsResponse && tagsResponse[0] !== null,
+      isTagsInserted,
     };
   });
 
