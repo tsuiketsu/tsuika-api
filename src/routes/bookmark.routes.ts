@@ -588,15 +588,13 @@ router.openapi(getBookmarkByTagId, async (c) => {
   return c.json(
     {
       success: true,
-      data: {
-        ...data.map((b) =>
-          Object.assign({}, b, {
-            thumbnail: !b.isEncrypted
-              ? createThumbnailURL(b.thumbnail)
-              : b.thumbnail || null,
-          }),
-        ),
-      } as BookmarkType[],
+      data: data.map((b) =>
+        Object.assign({}, b, {
+          thumbnail: !b.isEncrypted
+            ? createThumbnailURL(b.thumbnail)
+            : b.thumbnail || null,
+        }),
+      ) as BookmarkType[],
       message: "Successfully fetched bookmarks",
       pagination: {
         page,
