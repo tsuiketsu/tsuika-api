@@ -24,7 +24,6 @@ import { fetchLinkPreview } from "@/utils/link-preview";
 import {
   type CreateObjectResponse,
   createBucketObject,
-  createObjectStoreURL,
   deleteObjectFromBucket,
   deleteObjectsFromBucket,
 } from "@/utils/minio";
@@ -37,6 +36,7 @@ import { tag } from "../db/schema/tag.schema";
 import { createRouter } from "../lib/create-app";
 import { type BookmarkType, bookmarkFlags } from "../types/schema.types";
 import {
+  createThumbnailURL,
   getOrderDirection,
   getPagination,
   getUserId,
@@ -192,16 +192,6 @@ export const bookmarkPublicFields = {
     "createdAt",
     "updatedAt",
   ]),
-};
-
-const createThumbnailURL = (thumbnail: string | null) => {
-  if (thumbnail) {
-    return hasHttpPrefix(thumbnail)
-      ? thumbnail
-      : createObjectStoreURL(BUCKET, thumbnail);
-  }
-
-  return null;
 };
 
 // -----------------------------------------
@@ -507,7 +497,7 @@ router.openapi(getBookmarks, async (c) => {
           id: publicId,
           folderId: bookmarkFolder?.publicId,
           thumbnail: !rest.isEncrypted
-            ? createThumbnailURL(thumbnail)
+            ? createThumbnailURL(thumbnail, BUCKET)
             : thumbnail || null,
           tags: bookmarkTag.map(({ tag, appliedAt }) => ({
             ...tag,
@@ -591,7 +581,7 @@ router.openapi(getBookmarkByTagId, async (c) => {
       data: data.map((b) =>
         Object.assign({}, b, {
           thumbnail: !b.isEncrypted
-            ? createThumbnailURL(b.thumbnail)
+            ? createThumbnailURL(b.thumbnail, BUCKET)
             : b.thumbnail || null,
         }),
       ) as BookmarkType[],
@@ -709,7 +699,7 @@ router.openapi(getBookmarksByFolderId, async (c) => {
           id: publicId,
           folderId: bookmarkFolder?.publicId,
           thumbnail: !rest.isEncrypted
-            ? createThumbnailURL(thumbnail)
+            ? createThumbnailURL(thumbnail, BUCKET)
             : thumbnail || null,
           tags: bookmarkTag.map(({ tag, appliedAt }) => ({
             ...tag,
@@ -777,7 +767,7 @@ router.openapi(getBookmarkById, async (c) => {
         id: publicId,
         folderId: bookmarkFolder?.publicId,
         thumbnail: !rest.isEncrypted
-          ? createThumbnailURL(thumbnail)
+          ? createThumbnailURL(thumbnail, BUCKET)
           : thumbnail || null,
         tags: rest.tags.map((tag) => ({ ...tag, id: tag.publicId })),
       },
@@ -942,7 +932,7 @@ router.openapi(updateBookmark, async (c) => {
         ...data.bookmark,
         folderId: folderId,
         thumbnail: !isEncrypted
-          ? createThumbnailURL(data.bookmark?.thumbnail)
+          ? createThumbnailURL(data.bookmark?.thumbnail, BUCKET)
           : thumbnail || null,
         ...(data.isTagsInserted ? { tags } : {}),
       },

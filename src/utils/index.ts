@@ -7,6 +7,7 @@ import {
 } from "../constants";
 import type { AuthType } from "../lib/create-app";
 import { type OrderDirection, orderDirections } from "../types";
+import { createObjectStoreURL } from "./minio";
 
 export const getUserId = async (c: Context<AuthType>): Promise<string> => {
   const userId = c.get("user")?.id;
@@ -74,4 +75,17 @@ export const omit = <T extends Record<string, unknown>, K extends keyof T>(
 export const hasHttpPrefix = (str: string | undefined | null): boolean => {
   if (!str || str.trim() === "") return false;
   return str.startsWith("http");
+};
+
+export const createThumbnailURL = (
+  thumbnail: string | null,
+  bucket: string,
+) => {
+  if (thumbnail) {
+    return hasHttpPrefix(thumbnail)
+      ? thumbnail
+      : createObjectStoreURL(bucket, thumbnail);
+  }
+
+  return null;
 };
