@@ -883,39 +883,55 @@ router.openapi(updateBookmark, async (c) => {
       throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
     }
 
-    if (!tags || tags.length === 0) {
-      return { bookmark: bmark[0], isTagsInserted: false };
-    }
+    // Get the previous bookmark tags for record
+    const prevTags = await tx.query.bookmarkTag.findMany({
+      where: orm.and(
+        orm.eq(bookmarkTag.userId, userId),
+        orm.eq(bookmarkTag.bookmarkId, prev.id),
+      ),
+    });
 
+    // Get tag ids that's passed by user via payload
     const tagIds =
       (
         await tx.query.tag.findMany({
           where: orm.and(
             orm.eq(bookmark.userId, userId),
-            orm.inArray(
-              tag.publicId,
-              tags?.map((tag) => tag.id),
-            ),
+            orm.inArray(tag.publicId, tags?.map((tag) => tag.id) ?? []),
           ),
           columns: { id: true },
         })
       )?.map((tag) => tag.id) ?? [];
 
+    // Filter new tagIds that's been passed from previous bookmark tags
+    const tagsToRemoveIds =
+      prevTags
+        .filter((tag) => !tagIds.includes(tag.tagId))
+        .map((t) => t.tagId) ?? [];
+
     let isTagsInserted = false;
 
+    // If passed tag ids aren't empty run this in UPSERT mode to include new tags
     if (tagIds.length > 0) {
-      const tagsResponse = await tx
+      await tx
         .insert(bookmarkTag)
         .values(tagIds.map((tagId) => ({ userId, tagId, bookmarkId: prev.id })))
         .onConflictDoNothing()
         .returning({ bookmarkId: bookmarkTag.bookmarkId });
 
-      if (!tagsResponse || tagsResponse[0] == null) {
-        tx.rollback();
-        throwError("INTERNAL_ERROR", "Failed to update bookmark", source);
-      }
-
       isTagsInserted = true;
+    }
+
+    if (tagsToRemoveIds.length > 0) {
+      await tx
+        .delete(bookmarkTag)
+        .where(
+          orm.and(
+            orm.eq(bookmarkTag.userId, userId),
+            orm.eq(bookmarkTag.bookmarkId, prev.id),
+            orm.inArray(bookmarkTag.tagId, tagsToRemoveIds),
+          ),
+        );
     }
 
     return {
