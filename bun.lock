@@ -15,6 +15,7 @@
         "jsonwebtoken": "^9.0.2",
         "link-preview-js": "^3.1.0",
         "lodash.kebabcase": "^4.1.1",
+        "meilisearch": "^0.54.0",
         "minio": "^8.0.6",
         "nanoid": "^5.1.5",
         "normalize-url": "^8.0.1",
@@ -596,6 +597,8 @@
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
     "md-to-react-email": ["md-to-react-email@5.0.5", "", { "dependencies": { "marked": "7.0.4" }, "peerDependencies": { "react": "^18.0 || ^19.0" } }, "sha512-OvAXqwq57uOk+WZqFFNCMZz8yDp8BD3WazW1wAKHUrPbbdr89K9DWS6JXY09vd9xNdPNeurI8DU/X4flcfaD8A=="],
+
+    "meilisearch": ["meilisearch@0.54.0", "", {}, "sha512-b1bwJAEfj8C6hgSN88+/LvW3pe3nWC+thBS2seAbPZGakf/vzsLqppgZquiomzCr2GhU7U7H289625qhYe3rbw=="],
 
     "meow": ["meow@12.1.1", "", {}, "sha512-BhXM0Au22RwUneMPwSCnyhTOizdWoIEPU9sp0Aqa1PnDMR5Wv2FGXYDjuzJEIX+Eo2Rb8xuYe5jrnm5QowQFkw=="],
 

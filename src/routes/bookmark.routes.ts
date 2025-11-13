@@ -3,6 +3,7 @@ import { BOOKMARK_FILTERS } from "@/constants";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
+import meil from "@/lib/meil";
 import {
   addBookmarksToFolder,
   createBookmark,
@@ -47,6 +48,7 @@ import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
 const BUCKET = "thumbnails";
+const MEIL_INDEX = "bookmarks";
 
 const getFavIcon = (url: string) => {
   return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
@@ -349,6 +351,18 @@ router.openapi(createBookmark, async (c) => {
 
   const { publicId, ...rest } = data.bookmark;
 
+  // Add search indexes
+  const bmarkThumbnail = attachment?.url ?? rest.thumbnail;
+
+  await meil.index(MEIL_INDEX).addDocuments([
+    {
+      id: rest.id,
+      url: rest.url,
+      title: rest.title,
+      thumbnail: bmarkThumbnail,
+    },
+  ]);
+
   return c.json(
     {
       success: true,
@@ -356,7 +370,7 @@ router.openapi(createBookmark, async (c) => {
       data: bookmarkSelectSchema.parse({
         ...rest,
         id: publicId,
-        thumbnail: attachment?.url ?? rest.thumbnail,
+        thumbnail: bmarkThumbnail,
         folderId,
         ...(data.isTagsInserted ? { tags } : {}),
       }),
@@ -940,16 +954,29 @@ router.openapi(updateBookmark, async (c) => {
     };
   });
 
+  // Update search index
+  const bmark = data.bookmark;
+  const bmarkThumbnail = !isEncrypted
+    ? createThumbnailURL(bmark?.thumbnail, BUCKET)
+    : thumbnail || null;
+
+  await meil.index(MEIL_INDEX).updateDocuments([
+    {
+      id: prev.id,
+      title: bmark.title,
+      url: bmark.url,
+      ...(bmarkThumbnail && { thumbnail: bmarkThumbnail }),
+    },
+  ]);
+
   return c.json(
     {
       success: true,
       message: "Bookmark updated successfully 🔖",
       data: {
-        ...data.bookmark,
+        ...bmark,
         folderId: folderId,
-        thumbnail: !isEncrypted
-          ? createThumbnailURL(data.bookmark?.thumbnail, BUCKET)
-          : thumbnail || null,
+        thumbnail: bmarkThumbnail,
         ...(data.isTagsInserted ? { tags } : {}),
       },
     },
@@ -976,6 +1003,7 @@ router.openapi(deleteBookmarkInBulk, async (c) => {
     .delete(bookmark)
     .where(orm.inArray(bookmark.publicId, bookmarkIds))
     .returning({
+      id: bookmark.id,
       deletedBookmarkId: bookmark.publicId,
       thumbnail: bookmark.thumbnail,
     });
@@ -992,6 +1020,11 @@ router.openapi(deleteBookmarkInBulk, async (c) => {
 
   if (objectIds.length > 0) {
     await deleteObjectsFromBucket(BUCKET, objectIds);
+  }
+
+  // Delete bookmarks search index
+  if (data[0]?.id) {
+    await meil.index(MEIL_INDEX).deleteDocument(data[0]?.id);
   }
 
   return c.json(
@@ -1014,14 +1047,13 @@ router.openapi(deleteBookmarkById, async (c) => {
   await verifyUserAccessByBookmark(c.req.param("id"), userId);
 
   // Remove bookmark from database
-  const data: { deletedBookmarkId: string; thumbnail: string | null }[] =
-    await db
-      .delete(bookmark)
-      .where(orm.eq(bookmark.publicId, c.req.param("id")))
-      .returning({
-        deletedBookmarkId: bookmark.publicId,
-        thumbnail: bookmark.thumbnail,
-      });
+  const data: { id: number; thumbnail: string | null }[] = await db
+    .delete(bookmark)
+    .where(orm.eq(bookmark.publicId, c.req.param("id")))
+    .returning({
+      id: bookmark.id,
+      thumbnail: bookmark.thumbnail,
+    });
 
   if (data.length === 0) {
     throwError("INTERNAL_ERROR", "Failed to delete bookmark", source);
@@ -1030,6 +1062,11 @@ router.openapi(deleteBookmarkById, async (c) => {
   // Delete objectStore thumbnail
   if (data[0]?.thumbnail && !hasHttpPrefix(data[0].thumbnail)) {
     await deleteObjectFromBucket(BUCKET, data[0].thumbnail);
+  }
+
+  // Delete search index
+  if (data[0]?.id) {
+    await meil.index(MEIL_INDEX).deleteDocument(data[0]?.id);
   }
 
   return c.json(
@@ -1076,46 +1113,61 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
     );
   }
 
-  // Get previous thumbnail url before updating
-  const prevThumbnail = await db.query.bookmark.findFirst({
-    where: orm.eq(bookmark.publicId, publicId),
-    columns: {
-      thumbnail: true,
-    },
-  });
-
-  // Update thumbnail
-  const data: { thumbnail: string | null }[] = await db
-    .update(bookmark)
-    .set({
-      thumbnail: thumbnail.fileId,
-      updatedAt: orm.sql`NOW()`,
-    })
-    .where(orm.eq(bookmark.publicId, publicId))
-    .returning({
-      thumbnail: bookmark.thumbnail,
+  const response = await db.transaction(async (tx) => {
+    const prev = await tx.query.bookmark.findFirst({
+      where: orm.eq(bookmark.publicId, publicId),
+      columns: {
+        id: true,
+        title: true,
+        url: true,
+        thumbnail: true,
+      },
     });
 
-  if (data.length === 0 || data[0] == null || data[0]?.thumbnail == null) {
-    throwError(
-      "THIRD_PARTY_SERVICE_FAILED",
-      "Failed to update thumbnail",
-      "bookmarks.patch",
-    );
-  }
+    const data: { thumbnail: string | null }[] = await db
+      .update(bookmark)
+      .set({
+        thumbnail: thumbnail.fileId,
+        updatedAt: orm.sql`NOW()`,
+      })
+      .where(orm.eq(bookmark.publicId, publicId))
+      .returning({
+        thumbnail: bookmark.thumbnail,
+      });
+
+    if (data.length === 0 || data[0] == null || data[0]?.thumbnail == null) {
+      throwError(
+        "THIRD_PARTY_SERVICE_FAILED",
+        "Failed to update thumbnail",
+        "bookmarks.patch",
+      );
+    }
+
+    return { prev, current: data[0] };
+  });
 
   // Delete & purge old thumbnail
-  if (prevThumbnail?.thumbnail) {
-    await deleteObjectFromBucket(BUCKET, prevThumbnail.thumbnail);
+  if (response.prev?.thumbnail) {
+    await deleteObjectFromBucket(BUCKET, response.prev.thumbnail);
   }
+
+  // Update bookmarks search index
+  const newThumbnail =
+    response.current?.thumbnail ?? "https://placehold.co/1280x698";
+  await meil.index(MEIL_INDEX).updateDocuments([
+    {
+      id: response.prev?.id,
+      title: response.prev?.title,
+      url: response.prev?.url,
+      thumbnail: newThumbnail,
+    },
+  ]);
 
   return c.json(
     {
       success: true,
       message: "Successfully updated thumbnail",
-      data: {
-        thumbnail: data[0]?.thumbnail ?? "https://placehold.co/1280x698",
-      },
+      data: { thumbnail: newThumbnail },
     },
     200,
   );

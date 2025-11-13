@@ -35,6 +35,17 @@ services:
       timeout: 5s
       retries: 5
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.16
+    environment:
+      MELI_HOST: ${MELI_HOST}
+      MELI_MASTER_KEY: ${MELI_MASTER_KEY}
+    volumes:
+      - meli-data:/meili_data
+    ports:
+      - 7700:7700
+
 volumes:
   minio-data:
   db_data:
+  meli-data:
