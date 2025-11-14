@@ -4,6 +4,7 @@ import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
 import meil from "@/lib/meil";
+import { createSources } from "@/openapi/helpers";
 import {
   addBookmarksToFolder,
   createBookmark,
@@ -15,6 +16,7 @@ import {
   getBookmarksByFolderId,
   getBookmarkUrls,
   getTotalBookmarksCount,
+  searchBookmarks,
   toggleBookmarkFlag,
   updateBookmark,
   updateBookmarkThumbnail,
@@ -47,6 +49,7 @@ import {
 import { getFolder as getFolderInfo } from "./folder.routes";
 
 const router = createRouter();
+const sources = createSources("bookmarks");
 const BUCKET = "thumbnails";
 const MEIL_INDEX = "bookmarks";
 
@@ -354,14 +357,29 @@ router.openapi(createBookmark, async (c) => {
   // Add search indexes
   const bmarkThumbnail = attachment?.url ?? rest.thumbnail;
 
-  await meil.index(MEIL_INDEX).addDocuments([
-    {
-      id: rest.id,
-      url: rest.url,
-      title: rest.title,
-      thumbnail: bmarkThumbnail,
-    },
-  ]);
+  if (!isEncrypted) {
+    await meil.index(MEIL_INDEX).addDocuments([
+      {
+        id: rest.id,
+        userId,
+        url: rest.url,
+        title: rest.title,
+        folderPublicId: folderId,
+        thumbnail: bmarkThumbnail,
+      },
+    ]);
+
+    // Add index attributes if not exists
+    const meilAttributes = await meil
+      .index(MEIL_INDEX)
+      .getFilterableAttributes();
+
+    if (meilAttributes?.length === 0) {
+      await meil
+        .index(MEIL_INDEX)
+        .updateFilterableAttributes(["userId", "folderPublicId"]);
+    }
+  }
 
   return c.json(
     {
@@ -476,12 +494,32 @@ router.openapi(getBookmarks, async (c) => {
   // Gets pagination query parameters
   const { page, limit, offset } = getPagination(c.req.query());
 
+  // Check if query given or not
+  const { query } = c.req.valid("query");
+
+  let queryCondition: orm.SQL<unknown> | undefined;
+
+  if (query) {
+    const searchResult = await meil.index(MEIL_INDEX).search(query, {
+      filter: `userId = "${userId}"`,
+      limit: 10,
+    });
+
+    if (searchResult && searchResult.hits.length > 0) {
+      queryCondition = orm.inArray(
+        bookmark.id,
+        searchResult.hits.map((h) => h.id),
+      );
+    }
+  }
+
   const data = await db.query.bookmark.findMany({
     with: bookmarkJoins,
     where: orm.and(
       orm.eq(bookmark.userId, userId),
       orm.eq(bookmark.isEncrypted, false),
       condition,
+      queryCondition,
     ),
     orderBy: () => {
       if (orderBy) {
@@ -526,6 +564,55 @@ router.openapi(getBookmarks, async (c) => {
         total: data.length,
         hasMore: data.length === limit,
       },
+    },
+    200,
+  );
+});
+
+// -----------------------------------------
+// SEARCH BOOKMARKS
+// -----------------------------------------
+router.openapi(searchBookmarks, async (c) => {
+  const userId = await getUserId(c);
+  const { query, folderPublicId: folderId } = c.req.valid("query");
+
+  if (!query || query.trim() === "") {
+    throwError("MISSING_PARAMETER", "Missing parameters: query", sources.get);
+  }
+
+  const result = await meil.index(MEIL_INDEX).search(query, {
+    filter: [
+      `userId = "${userId}"`,
+      folderId ? `folderPublicId = "${folderId}"` : "",
+    ],
+    limit: 10,
+  });
+
+  if (!result) {
+    throwError("INTERNAL_ERROR", "Failed to fetch search results", sources.get);
+  }
+
+  if (result && result.hits.length === 0) {
+    throwError(
+      "NOT_FOUND",
+      "Not bookmarks with the given query found",
+      sources.get,
+    );
+  }
+
+  console.log(result);
+
+  return c.json(
+    {
+      success: true,
+      data: result.hits.map((h) => ({
+        id: h.id,
+        url: h.url,
+        title: h.title,
+        thumbnail: h.thumbnail,
+        folderPublicId: h.folderPublicId,
+      })),
+      message: "Successfully fetched search results",
     },
     200,
   );
@@ -667,10 +754,17 @@ router.openapi(getBookmarksByFolderId, async (c) => {
   let queryCondition: orm.SQL<unknown> | undefined;
 
   if (bookmarkQuery && bookmarkQuery.trim() !== "") {
-    queryCondition = orm.or(
-      orm.ilike(bookmark.title, `%${bookmarkQuery}%`),
-      orm.ilike(bookmark.url, `%${bookmarkQuery}%`),
-    );
+    const queryResult = await meil.index(MEIL_INDEX).search(bookmarkQuery, {
+      filter: [folderId ? `folderPublicId = "${folderId}"` : ""],
+      limit: 10,
+    });
+
+    if (queryResult.hits.length > 0) {
+      queryCondition = orm.inArray(
+        bookmark.id,
+        queryResult.hits.map((b) => b.id),
+      );
+    }
   }
 
   const orderBy = getOrderDirection(c.req.query(), "folders.get");
@@ -960,14 +1054,18 @@ router.openapi(updateBookmark, async (c) => {
     ? createThumbnailURL(bmark?.thumbnail, BUCKET)
     : thumbnail || null;
 
-  await meil.index(MEIL_INDEX).updateDocuments([
-    {
-      id: prev.id,
-      title: bmark.title,
-      url: bmark.url,
-      ...(bmarkThumbnail && { thumbnail: bmarkThumbnail }),
-    },
-  ]);
+  if (!isEncrypted) {
+    await meil.index(MEIL_INDEX).updateDocuments([
+      {
+        id: prev.id,
+        userId,
+        title: bmark.title,
+        folderPublicId: folderId,
+        url: bmark.url,
+        ...(bmarkThumbnail && { thumbnail: bmarkThumbnail }),
+      },
+    ]);
+  }
 
   return c.json(
     {
@@ -1121,6 +1219,8 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
         title: true,
         url: true,
         thumbnail: true,
+        folderId: true,
+        isEncrypted: true,
       },
     });
 
@@ -1152,16 +1252,33 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
   }
 
   // Update bookmarks search index
+  let folderPublicId: string | null = null;
+
+  if (response.prev?.folderId) {
+    folderPublicId =
+      (
+        await db.query.folder.findFirst({
+          where: orm.eq(folder.id, response.prev?.folderId),
+          columns: { publicId: true },
+        })
+      )?.publicId ?? null;
+  }
+
   const newThumbnail =
     response.current?.thumbnail ?? "https://placehold.co/1280x698";
-  await meil.index(MEIL_INDEX).updateDocuments([
-    {
-      id: response.prev?.id,
-      title: response.prev?.title,
-      url: response.prev?.url,
-      thumbnail: newThumbnail,
-    },
-  ]);
+
+  if (response.prev?.isEncrypted) {
+    await meil.index(MEIL_INDEX).updateDocuments([
+      {
+        id: response.prev?.id,
+        userId,
+        title: response.prev?.title,
+        folderPublicId: folderPublicId,
+        url: response.prev?.url,
+        thumbnail: newThumbnail,
+      },
+    ]);
+  }
 
   return c.json(
     {

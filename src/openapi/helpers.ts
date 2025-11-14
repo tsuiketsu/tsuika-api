@@ -78,3 +78,14 @@ export function createSources(text: string) {
     ALLOWED_METHODS.map((v) => [v, `${text}/${v.toLowerCase()}`]),
   ) as Record<Lowercase<(typeof ALLOWED_METHODS)[number]>, string>;
 }
+
+export function createMeilisearchObject(object: z.ZodObject) {
+  return z.object({
+    hits: z.array(object),
+    query: z.string(),
+    processingTimeMs: z.number(),
+    limit: z.number(),
+    offset: z.number(),
+    estimatedTotalHits: z.number(),
+  });
+}

@@ -152,9 +152,14 @@ export const getBookmarks = createRoute({
   request: {
     query: z
       .object({
-        filter: z.enum(BOOKMARK_FILTERS).optional(),
+        query: z.string().optional(),
+        filter: z.preprocess(
+          (val) => (val === "" ? undefined : val),
+          z.enum(BOOKMARK_FILTERS).optional(),
+        ),
       })
-      .extend(paginationQuerySchema.shape),
+      .extend(paginationQuerySchema.shape)
+      .partial(),
   },
   responses: {
     200: createSuccessObject({
@@ -165,6 +170,49 @@ export const getBookmarks = createRoute({
     [ERROR_DEFINITIONS.NOT_FOUND.status]: createErrorObject({
       desc: "If bookmarks not found",
       message: "Bookmarks not found",
+      code: "NOT_FOUND",
+      source: sources.get,
+    }),
+  },
+});
+
+// -----------------------------------------
+// SEARCH BOOKMARKS
+// -----------------------------------------
+export const searchBookmarks = createRoute({
+  method: "get",
+  path: "/search",
+  summary: "Search",
+  tags,
+  operationId: "bookmarks_search_get",
+  request: {
+    query: z.object({
+      query: z.string().optional(),
+      folderPublicId: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: createSuccessObject({
+      data: z.array(
+        SelectSchema.pick({
+          id: true,
+          url: true,
+          title: true,
+          thumbnail: true,
+        }).extend({
+          folderPublicId: z.string(),
+        }),
+      ),
+      message: "Successfully fetched results",
+      isPagination: true,
+    }),
+    [ERROR_DEFINITIONS.INTERNAL_ERROR.status]: createErrorObject({
+      message: "Failed to fetch search results",
+      code: "INTERNAL_ERROR",
+      source: sources.get,
+    }),
+    [ERROR_DEFINITIONS.NOT_FOUND.status]: createErrorObject({
+      message: "Not bookmarks with the given query found",
       code: "NOT_FOUND",
       source: sources.get,
     }),
