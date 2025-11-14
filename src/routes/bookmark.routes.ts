@@ -361,6 +361,7 @@ router.openapi(createBookmark, async (c) => {
     await meil.index(MEIL_INDEX).addDocuments([
       {
         id: rest.id,
+        publicId,
         userId,
         url: rest.url,
         title: rest.title,
@@ -600,13 +601,12 @@ router.openapi(searchBookmarks, async (c) => {
     );
   }
 
-  console.log(result);
-
   return c.json(
     {
       success: true,
       data: result.hits.map((h) => ({
         id: h.id,
+        publicId: h.publicId,
         url: h.url,
         title: h.title,
         thumbnail: h.thumbnail,
@@ -1058,6 +1058,7 @@ router.openapi(updateBookmark, async (c) => {
     await meil.index(MEIL_INDEX).updateDocuments([
       {
         id: prev.id,
+        publicId,
         userId,
         title: bmark.title,
         folderPublicId: folderId,
@@ -1271,6 +1272,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
     await meil.index(MEIL_INDEX).updateDocuments([
       {
         id: response.prev?.id,
+        publicId,
         userId,
         title: response.prev?.title,
         folderPublicId: folderPublicId,
