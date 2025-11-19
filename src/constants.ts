@@ -1,6 +1,7 @@
 export const DEFAULT_QUERY_LIMIT = 10;
 export const MAX_QUERY_LIMIT = 100;
 export const INVALID_CHARS = /[/\\?%*:|"<>.]/;
+export const UPLOADS_DIR = "./data/uploads";
 export const trustedOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.CORS_ORIGIN_BROWSER_EXTENSION,

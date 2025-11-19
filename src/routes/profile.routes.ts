@@ -4,9 +4,9 @@ import { getProfile, updateUserPreferences } from "@/openapi/routes/profile";
 import { createThumbnailURL, getUserId } from "@/utils";
 import {
   type CreateObjectResponse,
-  createBucketObject,
-  deleteObjectFromBucket,
-} from "@/utils/minio";
+  deleteObject,
+  saveObject,
+} from "@/utils/storage";
 import { db } from "../db";
 import { profile } from "../db/schema/profile.schema";
 import { createRouter } from "../lib/create-app";
@@ -65,7 +65,7 @@ router.openapi(updateUserPreferences, async (c) => {
   const image = formData?.dashboardThumbnail as unknown;
 
   if (image && image instanceof File) {
-    cloudImage = await createBucketObject({
+    cloudImage = await saveObject({
       origin: "local",
       fileUri: image,
       bucket: BUCKET,
@@ -123,7 +123,7 @@ router.openapi(updateUserPreferences, async (c) => {
   // Clean up previous dashboardThumbnail
   if (prevThumbnailFileId) {
     console.log(prevThumbnailFileId);
-    await deleteObjectFromBucket(BUCKET, prevThumbnailFileId);
+    await deleteObject(BUCKET, prevThumbnailFileId);
   }
 
   return c.json(

@@ -7,7 +7,7 @@ import {
 } from "../constants";
 import type { AuthType } from "../lib/create-app";
 import { type OrderDirection, orderDirections } from "../types";
-import { createObjectStoreURL } from "./minio";
+import { createObjectStoreURL } from "./storage";
 
 export const getUserId = async (c: Context<AuthType>): Promise<string> => {
   const userId = c.get("user")?.id;

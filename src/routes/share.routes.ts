@@ -14,11 +14,12 @@ import {
   lockSharedFolder,
   unlockSharedFolder,
 } from "@/openapi/routes/share";
-import { omit } from "@/utils";
+import { createThumbnailURL, omit } from "@/utils";
 import { verifyHash } from "@/utils/crypto";
 import { bookmarkPublicFields } from "./bookmark.routes";
 
 const router = createRouter();
+const BUCKET = "thumbnails";
 
 const cookieOpts: CookieOptions = {
   secure: true,
@@ -145,7 +146,12 @@ router.openapi(getSharedFolderContent, async (c) => {
           ...omit(target, ["isPublic"]),
           folder: omit(target.folder, ["id"]),
         },
-        { bookmarks },
+        {
+          bookmarks: bookmarks.map((b) => ({
+            ...b,
+            thumbnail: createThumbnailURL(b.thumbnail, BUCKET),
+          })),
+        },
       ),
       message: "Successfully fetched bookmarks",
     },

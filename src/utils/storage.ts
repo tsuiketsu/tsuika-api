@@ -1,5 +1,7 @@
+import { mkdir, rm } from "node:fs/promises";
+import { dirname } from "node:path";
 import { z } from "@hono/zod-openapi";
-import minioClient from "@/lib/minio";
+import { UPLOADS_DIR } from "@/constants";
 import { generatePublicId } from "./nanoid";
 
 // -----------------------------------------
@@ -16,11 +18,7 @@ type CreateObjectArgs = {
 } & z.infer<typeof objectInsertSchema>;
 
 export const createObjectStoreURL = (bucket: string, objectId: string) => {
-  return (
-    process.env.S3_BUCKET_URL +
-    `/api/v1/buckets/${bucket}/objects/download?` +
-    `preview=true&prefix=${objectId}`
-  );
+  return `http://localhost:8000/${UPLOADS_DIR}/${bucket}/${objectId}`;
 };
 
 export type CreateObjectResponse = {
@@ -39,16 +37,14 @@ const defaultValue = {
   mimeType: null,
 };
 
-export async function createBucketObject(
+async function saveFileLocally(filePath: string, buffer: Buffer<ArrayBuffer>) {
+  await mkdir(dirname(filePath), { recursive: true });
+  await Bun.write(filePath, buffer);
+}
+
+export async function saveObject(
   args: CreateObjectArgs,
 ): Promise<CreateObjectResponse> {
-  // Create bucket if not exists
-  const exists = await minioClient.bucketExists(args.bucket);
-
-  if (!exists) {
-    await minioClient.makeBucket(args.bucket);
-  }
-
   const objectId = args.objectId ?? generatePublicId();
 
   if (args.origin === "remote") {
@@ -59,29 +55,25 @@ export async function createBucketObject(
         return defaultValue;
       }
 
+      const contentType = response.headers.get("content-type");
+
+      if (!contentType) {
+        return defaultValue;
+      }
+
       // Create buffer
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const contentType = response.headers.get("content-type");
+      const fileExt = contentType.split("/").slice(-1)[0];
+      const fileName = `${objectId}.${fileExt}`;
+      const filePath = `${UPLOADS_DIR}/${args.bucket}/${fileName}`;
 
-      const metaData = {
-        "Content-Type": contentType,
-        "X-Amz-Meta-Project": "tsuika",
-        "Cache-Control": "public, max-age=31536000",
-      };
-
-      void (await minioClient.putObject(
-        args.bucket,
-        objectId,
-        buffer,
-        buffer.length,
-        metaData,
-      ));
+      await saveFileLocally(filePath, buffer);
 
       return {
-        fileId: objectId,
-        url: createObjectStoreURL(args.bucket, objectId),
+        fileId: fileName,
+        url: createObjectStoreURL(args.bucket, fileName),
         mimeType: contentType,
         name: args.fileUri,
         size: buffer.length,
@@ -98,24 +90,15 @@ export async function createBucketObject(
     try {
       const bytes = await args.fileUri.arrayBuffer();
       const buffer = Buffer.from(bytes);
+      const fileExt = args.fileUri.type.split("/").slice(-1)[0];
+      const fileName = `${objectId}.${fileExt}`;
+      const filePath = `${UPLOADS_DIR}/${args.bucket}/${fileName}`;
 
-      const metaData = {
-        "Content-Type": args.fileUri.type,
-        "X-Amz-Meta-Project": "tsuika",
-        "Cache-Control": "public, max-age=31536000",
-      };
-
-      void (await minioClient.putObject(
-        args.bucket,
-        objectId,
-        buffer,
-        buffer.length,
-        metaData,
-      ));
+      await saveFileLocally(filePath, buffer);
 
       return {
-        fileId: objectId,
-        url: createObjectStoreURL(args.bucket, objectId),
+        fileId: fileName,
+        url: createObjectStoreURL(args.bucket, fileName),
         size: buffer.length,
         name: args.fileUri.name,
         mimeType: args.fileUri.type,
@@ -136,16 +119,9 @@ export async function createBucketObject(
 // -----------------------------------------
 // DELETE IMAGE HANDLER
 // -----------------------------------------
-
-export async function deleteObjectFromBucket(bucket: string, fileId: string) {
-  const exists = await minioClient.bucketExists(bucket);
-
-  if (!exists) return;
-
+export async function deleteObject(bucket: string, fileId: string) {
   try {
-    await minioClient.removeObject(bucket, fileId, {
-      forceDelete: true,
-    });
+    await rm(`${UPLOADS_DIR}/${bucket}/${fileId}`);
   } catch (error) {
     console.error(`Failed to delete file ${fileId}`, error);
   }
@@ -154,16 +130,11 @@ export async function deleteObjectFromBucket(bucket: string, fileId: string) {
 // -----------------------------------------
 // DELETE IMAGES HANDLER
 // -----------------------------------------
-export async function deleteObjectsFromBucket(
-  bucket: string,
-  fileIds: string[],
-) {
-  const exists = await minioClient.bucketExists(bucket);
-
-  if (!exists) return;
-
+export async function deleteObjectInBulk(bucket: string, fileIds: string[]) {
   try {
-    void (await minioClient.removeObjects(bucket, fileIds));
+    for (const fileId of fileIds) {
+      await rm(`${UPLOADS_DIR}/${bucket}/${fileId}`);
+    }
   } catch (error) {
     console.error(`Failed to delete file ${fileIds}`, error);
   }

@@ -24,14 +24,14 @@ import {
 import type { LinkPreviewResponse } from "@/types/link-preview.types";
 import { getImageMetadata, type Metadata } from "@/utils/image-metadata";
 import { fetchLinkPreview } from "@/utils/link-preview";
-import {
-  type CreateObjectResponse,
-  createBucketObject,
-  deleteObjectFromBucket,
-  deleteObjectsFromBucket,
-} from "@/utils/minio";
 import { generatePublicId } from "@/utils/nanoid";
 import { getCleanUrl } from "@/utils/parse-url";
+import {
+  type CreateObjectResponse,
+  deleteObject,
+  deleteObjectInBulk,
+  saveObject,
+} from "@/utils/storage";
 import { db } from "../db";
 import { bookmark, bookmarkSelectSchema } from "../db/schema/bookmark.schema";
 import { bookmarkTag } from "../db/schema/bookmark-tag.schema";
@@ -256,7 +256,7 @@ router.openapi(createBookmark, async (c) => {
     imageMeta = await getImageMetadata(siteMetaImage);
 
     // Cache thumbnail to objectStore
-    attachment = await createBucketObject({
+    attachment = await saveObject({
       origin: "remote",
       fileUri: siteMetaImage,
       bucket: BUCKET,
@@ -944,10 +944,10 @@ router.openapi(updateBookmark, async (c) => {
     // Cleanup previous thumbnail from object store
 
     if (prev.thumbnail && !hasHttpPrefix(prev.thumbnail)) {
-      await deleteObjectFromBucket(BUCKET, prev.thumbnail);
+      await deleteObject(BUCKET, prev.thumbnail);
     }
 
-    attachment = await createBucketObject({
+    attachment = await saveObject({
       origin: "remote",
       fileUri: newThumbnail,
       bucket: BUCKET,
@@ -1118,7 +1118,7 @@ router.openapi(deleteBookmarkInBulk, async (c) => {
     .filter((t) => t !== null);
 
   if (objectIds.length > 0) {
-    await deleteObjectsFromBucket(BUCKET, objectIds);
+    await deleteObjectInBulk(BUCKET, objectIds);
   }
 
   // Delete bookmarks search index
@@ -1160,7 +1160,7 @@ router.openapi(deleteBookmarkById, async (c) => {
 
   // Delete objectStore thumbnail
   if (data[0]?.thumbnail && !hasHttpPrefix(data[0].thumbnail)) {
-    await deleteObjectFromBucket(BUCKET, data[0].thumbnail);
+    await deleteObject(BUCKET, data[0].thumbnail);
   }
 
   // Delete search index
@@ -1198,7 +1198,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
   }
 
   // Upload thumbnail on Minio bucket
-  const thumbnail = await createBucketObject({
+  const thumbnail = await saveObject({
     origin: "local",
     fileUri: localThumbnailUrl,
     bucket: BUCKET,
@@ -1249,7 +1249,7 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
 
   // Delete & purge old thumbnail
   if (response.prev?.thumbnail) {
-    await deleteObjectFromBucket(BUCKET, response.prev.thumbnail);
+    await deleteObject(BUCKET, response.prev.thumbnail);
   }
 
   // Update bookmarks search index

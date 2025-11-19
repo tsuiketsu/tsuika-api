@@ -7,7 +7,7 @@ import { createRouter } from "@/lib/create-app";
 import { createSources } from "@/openapi/helpers";
 import { createAsset, getAsset } from "@/openapi/routes/asset";
 import { getUserId } from "@/utils";
-import { createBucketObject, type objectInsertSchema } from "@/utils/minio";
+import { type objectInsertSchema, saveObject } from "@/utils/storage";
 
 const router = createRouter();
 const sources = createSources("assets");
@@ -52,7 +52,7 @@ router.openapi(getAsset, async (c) => {
 router.openapi(createAsset, async (c) => {
   const body = await c.req.parseBody();
 
-  const file = await createBucketObject({
+  const file = await saveObject({
     ...(body as z.infer<typeof objectInsertSchema>),
     bucket: BUCKET,
   });

@@ -1,7 +1,7 @@
 import { createRoute } from "@hono/zod-openapi";
 import { assetSelectSchema } from "@/db/schema/asset.schema";
 import { ERROR_DEFINITIONS } from "@/errors/codes";
-import { objectInsertSchema } from "@/utils/minio";
+import { objectInsertSchema } from "@/utils/storage";
 import {
   createErrorObject,
   createIdParamSchema,

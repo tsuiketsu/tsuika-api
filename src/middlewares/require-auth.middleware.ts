@@ -6,6 +6,7 @@ const ignoreList = [
   "/api/verification-email",
   "/api/public",
   "/openapi.json",
+  "/uploads",
 ];
 
 const requireAuth = async (c: Context, next: Next) => {

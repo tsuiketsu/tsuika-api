@@ -37,6 +37,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Ignore everything in public/temp
 public/temp/*
 
+data/*
+
 # Except .gitkeep in public/temp
 !public/temp/.gitkeep
 

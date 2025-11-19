@@ -1,8 +1,9 @@
+import { serveStatic } from "hono/bun";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { logger } from "hono/logger";
 import kebabCase from "lodash.kebabcase";
-import { ALLOWED_METHODS, trustedOrigins } from "./constants";
+import { ALLOWED_METHODS, trustedOrigins, UPLOADS_DIR } from "./constants";
 import createApp from "./lib/create-app";
 import blockDemoHostMiddleware from "./middlewares/block-demo-host.middleware";
 import requireAuth from "./middlewares/require-auth.middleware";
@@ -28,6 +29,7 @@ app.use(
 );
 app.use("*", blockDemoHostMiddleware);
 app.use("*", requireAuth);
+app.use(`${UPLOADS_DIR.replace(".", "")}/*`, serveStatic({ root: "./" }));
 
 // ROUTES
 const { auth, authData, share, ...routes } = allRoutes;
