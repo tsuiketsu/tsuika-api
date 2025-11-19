@@ -20,8 +20,9 @@ FROM base AS release
 COPY --from=install /temp/prod/node_modules node_modules
 COPY --from=prerelease /app/dist /app/dist
 COPY --from=prerelease /app/package.json .
-
+COPY --from=prerelease /app/drizzle /app/drizzle
+COPY --from=prerelease /app/scripts /app/scripts
 
 USER bun
-EXPOSE 8000/tcp 
-ENTRYPOINT [ "bun", "run", "serve"  ]
+EXPOSE 8000/tcp
+CMD [ "bun", "run", "serve"  ]
