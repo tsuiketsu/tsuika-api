@@ -22,13 +22,13 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.16
     environment:
-      MELI_HOST: ${MELI_HOST}
-      MELI_MASTER_KEY: ${MELI_MASTER_KEY}
+      MEILI_HOST: ${MEILI_HOST}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
     volumes:
-      - meli-data:/meili_data
+      - meili-data:/meili_data
     ports:
       - 7700:7700
 
 volumes:
   db_data:
-  meli-data:
+  meili-data:

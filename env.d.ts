@@ -15,7 +15,7 @@ declare namespace NodeJS {
     S3_BUCKET_ACCESS_KEY: string;
     S3_BUCKET_KEY: string;
     S3_BUCKET_URL: string;
-    MELI_HOST: string;
-    MELI_MASTER_KEY: string;
+    MEILI_HOST: string;
+    MEILI_MASTER_KEY: string;
   }
 }
