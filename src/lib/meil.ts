@@ -1,6 +1,12 @@
 import { Meilisearch } from "meilisearch";
 
-export default new Meilisearch({
-  host: process.env.MEILI_HOST,
-  apiKey: process.env.MEILI_MASTER_KEY,
-});
+const apiKey = process.env.MEILI_MASTER_KEY;
+
+const meil = apiKey
+  ? new Meilisearch({
+      host: process.env.MEILI_HOST,
+      apiKey,
+    })
+  : null;
+
+export default meil;

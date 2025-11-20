@@ -3,6 +3,11 @@ import { BOOKMARK_FILTERS } from "@/constants";
 import { collabFolder } from "@/db/schema/collab-folder.schema";
 import { folder } from "@/db/schema/folder.schema";
 import { throwError } from "@/errors/handlers";
+import {
+  addDocument,
+  deleteDocument,
+  updateDocuments,
+} from "@/helpers/bookmark";
 import meil from "@/lib/meil";
 import { createSources } from "@/openapi/helpers";
 import {
@@ -358,28 +363,17 @@ router.openapi(createBookmark, async (c) => {
   const bmarkThumbnail = attachment?.url ?? rest.thumbnail;
 
   if (!isEncrypted) {
-    await meil.index(MEIL_INDEX).addDocuments([
+    addDocument([
       {
         id: rest.id,
         publicId,
         userId,
         url: rest.url,
         title: rest.title,
-        folderPublicId: folderId,
+        folderPublicId: folderId ?? null,
         thumbnail: bmarkThumbnail,
       },
     ]);
-
-    // Add index attributes if not exists
-    const meilAttributes = await meil
-      .index(MEIL_INDEX)
-      .getFilterableAttributes();
-
-    if (meilAttributes?.length === 0) {
-      await meil
-        .index(MEIL_INDEX)
-        .updateFilterableAttributes(["userId", "folderPublicId"]);
-    }
   }
 
   return c.json(
@@ -501,7 +495,7 @@ router.openapi(getBookmarks, async (c) => {
   let queryCondition: orm.SQL<unknown> | undefined;
 
   if (query) {
-    const searchResult = await meil.index(MEIL_INDEX).search(query, {
+    const searchResult = await meil?.index(MEIL_INDEX).search(query, {
       filter: `userId = "${userId}"`,
       limit: 10,
     });
@@ -581,7 +575,7 @@ router.openapi(searchBookmarks, async (c) => {
     throwError("MISSING_PARAMETER", "Missing parameters: query", sources.get);
   }
 
-  const result = await meil.index(MEIL_INDEX).search(query, {
+  const result = await meil?.index(MEIL_INDEX).search(query, {
     filter: [
       `userId = "${userId}"`,
       folderId ? `folderPublicId = "${folderId}"` : "",
@@ -754,12 +748,12 @@ router.openapi(getBookmarksByFolderId, async (c) => {
   let queryCondition: orm.SQL<unknown> | undefined;
 
   if (bookmarkQuery && bookmarkQuery.trim() !== "") {
-    const queryResult = await meil.index(MEIL_INDEX).search(bookmarkQuery, {
+    const queryResult = await meil?.index(MEIL_INDEX).search(bookmarkQuery, {
       filter: [folderId ? `folderPublicId = "${folderId}"` : ""],
       limit: 10,
     });
 
-    if (queryResult.hits.length > 0) {
+    if (queryResult && queryResult.hits.length > 0) {
       queryCondition = orm.inArray(
         bookmark.id,
         queryResult.hits.map((b) => b.id),
@@ -1055,13 +1049,13 @@ router.openapi(updateBookmark, async (c) => {
     : thumbnail || null;
 
   if (!isEncrypted) {
-    await meil.index(MEIL_INDEX).updateDocuments([
+    await updateDocuments([
       {
         id: prev.id,
         publicId,
         userId,
         title: bmark.title,
-        folderPublicId: folderId,
+        folderPublicId: folderId ?? null,
         url: bmark.url,
         ...(bmarkThumbnail && { thumbnail: bmarkThumbnail }),
       },
@@ -1123,7 +1117,7 @@ router.openapi(deleteBookmarkInBulk, async (c) => {
 
   // Delete bookmarks search index
   if (data[0]?.id) {
-    await meil.index(MEIL_INDEX).deleteDocument(data[0]?.id);
+    await deleteDocument(data[0]?.id);
   }
 
   return c.json(
@@ -1165,7 +1159,7 @@ router.openapi(deleteBookmarkById, async (c) => {
 
   // Delete search index
   if (data[0]?.id) {
-    await meil.index(MEIL_INDEX).deleteDocument(data[0]?.id);
+    await deleteDocument(data[0]?.id);
   }
 
   return c.json(
@@ -1269,13 +1263,13 @@ router.openapi(updateBookmarkThumbnail, async (c) => {
     response.current?.thumbnail ?? "https://placehold.co/1280x698";
 
   if (response.prev?.isEncrypted) {
-    await meil.index(MEIL_INDEX).updateDocuments([
+    await updateDocuments([
       {
         id: response.prev?.id,
         publicId,
         userId,
         title: response.prev?.title,
-        folderPublicId: folderPublicId,
+        folderPublicId: folderPublicId ?? null,
         url: response.prev?.url,
         thumbnail: newThumbnail,
       },
