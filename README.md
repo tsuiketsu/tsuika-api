@@ -1,9 +1,10 @@
-## Tasks
-- [ ] Enforce RLS if possible
-- [ ] Add reminders
-- [ ] Add Code Snippets
-- [ ] Add Notes (small <= 500 words)
-- [ ] Link tags through `items` table
+> [!IMPORTANT]
+> ## 🗄️ This repository has been archived
+>
+> **`tsuika-api`** has been merged into the [**tsuika**](https://github.com/tsuiketsu/tsuika) monorepo.
+>
+> All future development, issues, and pull requests should be directed there.
+> This repository is kept for historical reference only and is no longer actively maintained.
 
 To install dependencies:
 
